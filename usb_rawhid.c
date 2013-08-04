@@ -35,12 +35,12 @@
 
 // You can change these to give your code its own name.
 #define STR_MANUFACTURER	L"Ruedi_Heimlicher"
-#define STR_PRODUCT		L"CNC_USB"
+#define STR_PRODUCT		L"PPM_USB"
 
 // These 4 numbers identify your device.  Set these to
 // something that is (hopefully) not used by any others!
-#define VENDOR_ID		0x16C0
-#define PRODUCT_ID		0x0480
+#define VENDOR_ID		0x16C1
+#define PRODUCT_ID		0x0481
 #define RAWHID_USAGE_PAGE	0xFFAB	// recommended: 0xFF00 to 0xFFFF
 #define RAWHID_USAGE		0x0200	// recommended: 0x0100 to 0xFFFF
 
@@ -52,6 +52,21 @@
 #define RAWHID_TX_INTERVAL	2	// max # of ms between transmit packets
 #define RAWHID_RX_SIZE		32	// receive packet size
 #define RAWHID_RX_INTERVAL	8	// max # of ms between receive packets
+
+#define OSZIPORT           PORTD
+#define OSZIPORTDDR        DDRD
+#define OSZIPORTPIN        PIND
+#define OSZI_PULS_A        0
+#define OSZI_PULS_B        1
+
+#define OSZI_A_LO OSZIPORT &= ~(1<<OSZI_PULS_A)
+#define OSZI_A_HI OSZIPORT |= (1<<OSZI_PULS_A)
+#define OSZI_A_TOGG OSZIPORT ^= (1<<OSZI_PULS_A)
+
+
+#define OSZI_B_LO OSZIPORT &= ~(1<<OSZI_PULS_B)
+#define OSZI_B_HI OSZIPORT |= (1<<OSZI_PULS_B)
+#define OSZI_B_TOGG OSZIPORT ^= (1<<OSZI_PULS_B)
 
 
 /**************************************************************************
@@ -281,25 +296,35 @@ uint8_t usb_configured(void)
 // receive a packet, with timeout
 int8_t usb_rawhid_recv(uint8_t *buffer, uint8_t timeout)
 {
+   //OSZI_B_LO ;
 	uint8_t intr_state;
-
 	// if we're not online (enumerated and configured), error
-	if (!usb_configuration) return -1;
+	if (!usb_configuration)
+   {
+      //OSZI_B_HI ;
+      return -1;
+   }
 	intr_state = SREG;
 	cli();
 	rx_timeout_count = timeout;
 	UENUM = RAWHID_RX_ENDPOINT;
+   //OSZI_B_HI ;
 	// wait for data to be available in the FIFO
 	while (1) 
    {
 		if (UEINTX & (1<<RWAL)) break;
 		SREG = intr_state;
-		if (rx_timeout_count == 0) return 0;
+		if (rx_timeout_count == 0)
+      {
+         //OSZI_B_HI ;
+         return 0;
+      }
 		if (!usb_configuration) return -1;
 		intr_state = SREG;
 		cli();
 		UENUM = RAWHID_RX_ENDPOINT;
 	}
+   
 	// read bytes from the FIFO
 	#if (RAWHID_RX_SIZE >= 64)
 	*buffer++ = UEDATX;
@@ -496,6 +521,8 @@ int8_t usb_rawhid_recv(uint8_t *buffer, uint8_t timeout)
 	// release the buffer
 	UEINTX = 0x6B;
 	SREG = intr_state;
+   //OSZI_B_HI ;
+   hidstatus = RAWHID_RX_SIZE;
 	return RAWHID_RX_SIZE;
 }
 
@@ -718,6 +745,7 @@ int8_t usb_rawhid_send(const uint8_t *buffer, uint8_t timeout)
 	// transmit it now
 	UEINTX = 0x3A;
 	SREG = intr_state;
+   ;
 	return RAWHID_TX_SIZE;
 }
 

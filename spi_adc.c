@@ -17,7 +17,7 @@ void MCP3208_spiDelay(unsigned int NOPcount)
 
 void MCP3208_spi_Init(void)
 {
-   // Set MOSI, SCK and ENB output, all other input
+   // Set MOSI, SCK and SS output, all other input
    SPI_DDR = (1<<SPI_MOSI_PIN)|(1<<SPI_SCK_PIN)|(1<<SPI_SS_PIN);  // set DD_SS to output
    SPI_DDR &= ~(1<<SPI_MISO_PIN);
    // Enable SPI, Master, set clock rate fclk/64

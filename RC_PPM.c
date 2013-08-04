@@ -38,11 +38,6 @@ static volatile uint8_t sendbuffer[32]={};
 
 #define TIMER0_STARTWERT	0x40
 
-
-
-
-
-
 volatile uint8_t timer0startwert=TIMER0_STARTWERT;
 #define USB_DATENBREITE 32
 //volatile uint8_t rxbuffer[USB_DATENBREITE];
@@ -57,8 +52,8 @@ void delay_ms(unsigned int ms);
 volatile uint8_t           adcstatus=0x00;
 
 volatile uint8_t           usbstatus=0x00;
-static volatile uint8_t    potstatus=0x00;
-static volatile uint8_t    anschlagstatus=0x00;
+static volatile uint8_t    potstatus=0x80; // Bit 7 gesetzt, Mittelwerte setzen
+static volatile uint8_t    impulscounter=0x00;
 
 #define USB_SEND  0 
 
@@ -72,10 +67,13 @@ static volatile uint8_t    pwmdivider=0;
 volatile char SPI_data='0';
 volatile char SPI_dataArray[SPI_BUFSIZE];
 volatile uint16_t POT_Array[SPI_BUFSIZE];
+volatile uint16_t Mitte_Array[SPI_BUFSIZE];
+
 volatile uint16_t Batteriespannung =0;
 volatile short int received=0;
 
-
+volatile uint16_t abschnittnummer=0;
+volatile uint16_t usbcount=0;
 
 
 
@@ -130,7 +128,7 @@ void slaveinit(void)
    DDRD |= (1<<PORTD6);
    PORTD |= (1<<PORTD6);
    
-   ADC_DDR &= ~(1<<0);
+   ADC_DDR &= ~(1<<PORTF0);
    
 }
 
@@ -151,6 +149,7 @@ void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
 
 // send a SPI message to the other device - 3 bytes then go back into
 // slave mode
+
 void send_message(void)
 {
    spi_init(SPI_MODE_1, SPI_MSB, SPI_NO_INTERRUPT, SPI_MSTR_CLK8);
@@ -181,17 +180,90 @@ void parse_message(void)
 ISR(SPI_STC_vect)
 {
    
-   SPI_dataArray[received++] = received_from_spi(0x00);
+//   SPI_dataArray[received++] = received_from_spi(0x00);
    
-   if (received >= SPI_BUFSIZE || SPI_dataArray[received-1] == 0x00)
+//   if (received >= SPI_BUFSIZE || SPI_dataArray[received-1] == 0x00)
    {
-      parse_message();
-      received = 0;
+//      parse_message();
+//      received = 0;
    }
 }
 
+void timer1_init(void)
+{
+   // Quelle http://www.mikrocontroller.net/topic/103629
+   
+   //#define FRAME_TIME 20 // msec
+   DDRB |= (1<<PORTB5); // OC1A Ausgang
+   PORTB |= (1<<PORTB5); // OC1A Ausgang
+   
+   DDRD |= (1<<PORTD5); //  Ausgang
+   PORTD |= (1<<PORTD5); //  Ausgang
 
-void timer0 (void)
+   //ICR1   = FRAME_TIME * 1200;								// PWM cycle time in usec, 50 ms
+   TCCR1A = (1<<COM1A0) | (1<<COM1A1);// | (1<<WGM11);	// OC1B set on match, set on TOP
+   TCCR1B = (1<<WGM13) | (1<<WGM12) | (1<<CS11);		// TOP = ICR1, clk = sysclk/8 (->1us)
+   TCNT1  = 0;														// reset Timer
+   
+                              // Impulsdauer
+   OCR1B  = 0x1FF;				// Impulsdauer des Kanalimpulses
+   
+   TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt:
+   TIMSK1 |= (1 << OCIE1B);  // enable timer compare interrupt:
+   OSZI_A_LO ;
+   OSZI_B_LO ;
+
+   impulscounter = 0;
+   OCR1A  = 2.141*POT_Array[impulscounter];
+
+} // end timer1
+
+void timer1_stop(void)
+{
+   TCCR1A = 0;
+   
+}
+
+
+
+
+ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
+{
+   
+   impulscounter++;
+   if (impulscounter < ANZ_POT)
+   {
+      OSZI_A_LO ;
+      // Laenge des naechsten Impuls setzen
+      OCR1A  = 2.141*POT_Array[impulscounter];
+      TCNT1  = 0;
+   }
+   else
+   {
+      OSZI_A_HI ;
+      
+      // Alle Impulse gesendet, Timer1 stop. Timer1 wird bei Beginn des naechsten Paketes wieder gestartet 
+      timer1_stop();
+      OSZI_B_HI ;
+   }
+   
+   //OSZI_B_LO ;
+   _delay_us(10);
+   
+   
+}
+
+
+ISR(TIMER1_COMPB_vect)	 //Ende des Kanalimpuls. ca 0.3 us
+{
+   //OSZI_A_LO ;
+   PORTB |= (1<<PORTB5); // OC1A Ausgang
+   
+   OSZI_A_HI ;
+}
+
+
+void timer0 (void) // nicht verwendet
 {
 // Timer fuer Exp
 	//TCCR0 |= (1<<CS01);						// clock	/8
@@ -199,7 +271,7 @@ void timer0 (void)
 	TCCR0B |= (1<<CS02)| (1<<CS02);			// clock	/256
 	//TCCR0 |= (1<<CS00)|(1<<CS02);			// clock /1024
 	TCCR0B |= (1 << CS10); // Set up timer 
-	OCR0A = 0x2;
+	OCR0A = 0x02;
 	
 	//TIFR |= (1<<TOV0);							//Clear TOV0 Timer/Counter Overflow Flag. clear pending interrupts
 	TIMSK0 |= (1<<TOIE0);							//Overflow Interrupt aktivieren
@@ -235,24 +307,24 @@ volatile uint16_t timer2BatterieCounter=0;
 
 ISR (TIMER2_OVF_vect) 
 { 
-	timer2Counter +=1;
+	timer2Counter ++;
    
-
-	if (timer2Counter >= 0xF)
+	if (timer2Counter >= 0x474) // Laenge des Impulspakets 20ms
 	{
-      potstatus |= (1<<POT_START); // Batteriespannung messen
+      
+      potstatus |= (1<<POT_START); // Potentiometer messen
       
       
       timer2BatterieCounter++; // Intervall fuer Messung der Batteriespannung
       if (timer2BatterieCounter >= 0xF)
       {
-         OSZI_B_TOGG ;
          adcstatus |= (1<<ADC_START); // Batteriespannung messen
          timer2BatterieCounter = 0;
+         
       }
 
 		timer2Counter = 0;
-      
+       ;
 	} 
 	TCNT2 = 10;							// ergibt 2 kHz fuer Timertakt
 }
@@ -266,6 +338,13 @@ ISR(TIMER2_COMP_vect) // Schaltet Impuls an SERVOPIN0 aus
 }
 */
 
+void setMitte(void)
+{
+   for (uint8_t i=0;i< SPI_BUFSIZE;i++)
+   {
+      Mitte_Array[i] = POT_Array[i];
+   }
+}
 
 
 #pragma mark - main
@@ -339,7 +418,7 @@ int main (void)
 	TIMSK2 |= (1 << TOIE2);    // Enable OV interrupt 
 	//OCR2A   = 5;             // Set CTC compare value with a prescaler of 64 
     TCCR2A = 0x00;
-
+   
    sei();
    
    PWM = 0;
@@ -357,23 +436,66 @@ int main (void)
 #pragma mark while	  
 	while (1)
 	{
-      
       //OSZI_B_LO;
 		//Blinkanzeige
 		loopcount0+=1;
-		if (loopcount0==0xAFFF)
+		if (loopcount0==0x8FFF)
 		{
 			loopcount0=0;
 			loopcount1+=1;
 			LOOPLEDPORT ^=(1<<LOOPLED);
          PORTD ^= (1<<PORTD6);
 			//
-			//STEPPERPORT_1 ^= (1 << MA_STEP);
-			//PORTD ^= (1<<0);
-			//lcd_gotoxy(18,1);
-			//lcd_puthex(loopcount1);
 			//timer0();
-		}
+         
+         if (loopcount1%0x0F == 0)
+         {
+            //lcd_gotoxy(18,1);
+            //lcd_puthex(hidstatus);
+         }
+         else if(loopcount1%8 == 4)
+         {
+            //lcd_gotoxy(18,1);
+            //lcd_putc('*');
+            //lcd_putc('*');
+            
+         }
+         
+         sendbuffer[0]=0x33;
+         sendbuffer[1]= abschnittnummer;
+         sendbuffer[2]= abschnittnummer>>8;
+         abschnittnummer++;
+         sendbuffer[3]= usbcount & 0xFF;
+         
+         
+         sendbuffer[4] = loopcount1&0xFF;
+         uint16_t adc0wert = adc_read(0);
+         sendbuffer[5] = adc0wert & 0xFF;
+         sendbuffer[6] = (adc0wert>>8) & 0xFF;
+
+         
+         if (loopcount1%0x1F == 0)
+         {
+            /*
+            lcd_gotoxy(0,1);
+            lcd_putint16(POT_Array[0]);
+            lcd_putc('*');
+            lcd_putint16(POT_Array[1]);
+            lcd_putc('*');
+             */
+         }
+         
+         for (int i=0;i<8;i++)
+         {
+            
+            sendbuffer[8+2*i]=(POT_Array[i] & 0xFF);    // 8 10
+            sendbuffer[8+2*i+1]= (POT_Array[i]>>8) & 0xFF;  // 9  11
+            
+         }
+         //OSZI_B_LO;
+         usb_rawhid_send((void*)sendbuffer, 50); // 20 us
+		//OSZI_B_HI;
+      }
       
       /**	ADC	***********************/
 
@@ -382,9 +504,12 @@ int main (void)
          Batteriespannung = adc_read(0);
          
          adcstatus &=  ~(1<< ADC_START);
+         
+         /*
          lcd_gotoxy(0,0);
          
          lcd_putint12Bit(Batteriespannung);
+         
          lcd_putc('*');
          uint8_t high = (Batteriespannung & 0xFF00)>>8; // *0xFF rechnen und zu low dazuzaehlen
          lcd_putint(high);
@@ -392,49 +517,85 @@ int main (void)
          lcd_putc('*');
          lcd_putint(low);
          //lcd_puthex(loopcount1);
-         
+          */
+         ;
+
       }
       
-      if (potstatus & (1<< POT_START)) // ADC starten
+      if (potstatus & (1<< POT_START)) // POT starten
       {
-         
+         //OSZI_A_LO ;
          uint8_t i=0;
          for(i=0;i< ANZ_POT;i++)
          {
             //lcd_putint(i);
-            POT_Array[i] = MCP3208_spiRead(SingleEnd,i);
-            _delay_us(100);
+            if (i<2)
+            {
+               //POT_Array[i] = MCP3208_spiRead(SingleEnd,i);
+               // Filter
+               POT_Array[i] = 3*POT_Array[i]/4 + (MCP3208_spiRead(SingleEnd,i)/4);
+               _delay_us(100);
+            }
+            else
+            {
+               POT_Array[i] = 0x800;
+            }
          }
          anzeigecounter++;
-         if (anzeigecounter %8 ==0)
+         
+         // Mittelwert speichern
+         if (potstatus & (1<< POT_MITTE))
          {
-            lcd_gotoxy(0,1);
+            setMitte();
+            potstatus &= ~(1<< POT_MITTE);
+         }
+         
+         if (anzeigecounter %0xF ==0)
+         {
+            //lcd_gotoxy(0,1);
+             if (usbstatus & (1<<USB_SEND))
+             {
+                //lcd_putc('+');
+                usbstatus &= ~(1<<USB_SEND);
+             }
+            /*
             lcd_putint12Bit(POT_Array[0]);
             lcd_putc(' ');
             lcd_putint12Bit(POT_Array[1]);
+             */
          }
          
+         //usb_rawhid_send((void*)sendbuffer, 50);
          potstatus &= ~(1<< POT_START);
+         
+         
+         
+         
+         timer1_init();
+        //PORTD &= ~(1<<PORTD5); //  LO
+         
+         
+         //timer1_stop();
+         
+         
+         //OSZI_A_HI ;
       } // end Pot messen
       
       
       
       /**	END ADC	***********************/
-      /*
-       pwmposition wird in der ISR incrementiert. Wenn pwmposition > ist als der eingestellte Wert PWM, wird der Impuls wieder abgeschaltet. Nach dem Overflow wird wieder eingeschaltet
-       */
-      
- 
-		
       
        /**	Begin USB-routinen	***********************/
       
         // Start USB
       //lcd_putc('u');
+      //OSZI_B_LO;
       r = usb_rawhid_recv((void*)buffer, 0);
-		if (r > 0) 
+      //OSZI_B_HI;
+      if (r > 0) 
       {
-         //OSZI_B_HI;
+         usbstatus |= (1<<USB_SEND);
+        
          cli(); 
          
          uint8_t code = 0x00;
@@ -456,32 +617,18 @@ int main (void)
                uint8_t indexh=buffer[18];
                uint8_t indexl=buffer[19];
                
-               sendbuffer[0]=0x33;
-               sendbuffer[6]=buffer[16];
-               
-               sendbuffer[8]= versionintl;
-               sendbuffer[9]= versioninth;
- //              usb_rawhid_send((void*)sendbuffer, 50); // nicht jedes Paket melden
-               
-               //             if (buffer[9]& 0x02)// letzter Abschnitt
-               
-               if (buffer[17]& 0x02)// letzter Abschnitt
+               for (int i=8;i<16;i++)
                {
+                  //sendbuffer[i]=POT_Array[i];
+
                }
+               //sendbuffer[6]=buffer[16];
                
+               //sendbuffer[8]= versionintl;
+               //sendbuffer[9]= versioninth;
+               //usb_rawhid_send((void*)sendbuffer, 50); // nicht jedes Paket melden
                
-               
-               // Daten vom buffer in CNCDaten laden
-               {
-                  uint8_t pos=(0);
-                  pos &= 0x03; // 2 bit // Beschraenkung des index auf Buffertiefe 
-                  //if (abschnittnummer>8)
-                  {
-                     //lcd_putint1(pos);
-                  }
-                   
-               }
-               
+             
                
                 
             } // default
@@ -490,7 +637,12 @@ int main (void)
          code=0;
          sei();
          
+         
 		} // r>0, neue Daten
+      else
+      {
+         //OSZI_B_LO;
+      }
       
       /**	End USB-routinen	***********************/
  		

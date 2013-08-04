@@ -7,6 +7,7 @@
 
 #define OSZI_A_LO OSZIPORT &= ~(1<<OSZI_PULS_A)
 #define OSZI_A_HI OSZIPORT |= (1<<OSZI_PULS_A)
+#define OSZI_A_TOGG OSZIPORT ^= (1<<OSZI_PULS_A)
 
 
 #define OSZI_B_LO OSZIPORT &= ~(1<<OSZI_PULS_B)
@@ -48,4 +49,6 @@
 #define ADC_START 0  // Start Messung Batteriespannung mit internem ADC
 
 #define POT_START 0  //    Start Messung Potentiometer
+#define POT_MITTE 7  //    Mittelwerte der Potentiometer speichern
+
 #define ANZ_POT   6
