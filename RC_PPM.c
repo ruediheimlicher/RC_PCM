@@ -599,7 +599,11 @@ int main (void)
          cli(); 
          
          uint8_t code = 0x00;
-         code = buffer[16];
+         code = buffer[2];
+         lcd_gotoxy(0,1);
+         lcd_puthex(code);
+         lcd_putc('0');
+         lcd_puthex(buffer[4]);
          switch (code)
          {   
                
