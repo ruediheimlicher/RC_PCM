@@ -439,7 +439,7 @@ int main (void)
       //OSZI_B_LO;
 		//Blinkanzeige
 		loopcount0+=1;
-		if (loopcount0==0x8FFF)
+		if (loopcount0==0x4FFF)
 		{
 			loopcount0=0;
 			loopcount1+=1;
@@ -581,8 +581,6 @@ int main (void)
          //OSZI_A_HI ;
       } // end Pot messen
       
-      
-      
       /**	END ADC	***********************/
       
        /**	Begin USB-routinen	***********************/
@@ -630,7 +628,7 @@ int main (void)
                
                //sendbuffer[8]= versionintl;
                //sendbuffer[9]= versioninth;
-               //usb_rawhid_send((void*)sendbuffer, 50); // nicht jedes Paket melden
+               usb_rawhid_send((void*)sendbuffer, 50); // nicht jedes Paket melden
                
              
                
