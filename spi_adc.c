@@ -1,5 +1,4 @@
-//www.pudn.com > Mega16_MCP3208.rar > mcp3208.c, change:2007-09-24,size:1824b
-
+//http://read.pudn.com/downloads163/sourcecode/embed/741340/Mega16_MCP3208/mcp3208.c__.htm
 
 
 #include <avr/io.h>

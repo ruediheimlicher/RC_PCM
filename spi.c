@@ -29,6 +29,14 @@ void spi_init(uint8_t mode, int dord, int interrupt, uint8_t clock)
     SPI_DDR |= (1<<SPI_SCK_PIN);// output
     SPI_DDR |= (1<<SPI_SS_PIN);// output
   }
+   /*
+    // spi_ram.c
+    // Enable SPI, Master, set clock rate fclk/64
+    // Setup (Falling) Sample (Rising) SPI set mode 3
+    // CPOL=1 : CPHA=1
+    SPCR = (1<<SPE)|(1<<MSTR)|(1<<SPR1)|(0<<SPR0)|(1<<CPOL)|(1<<CPHA);
+
+    */
   SPCR = ((interrupt ? 1 : 0)<<SPIE) // interrupt enabled
     | (1<<SPE) // enable SPI
     | (dord<<DORD) // LSB or MSB

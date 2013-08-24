@@ -23,7 +23,7 @@
 #include "usb_rawhid.c"
 #include "def.h"
 
-#include "spi.c"
+//#include "spi.c"
 #include "spi_adc.c"
 
 
@@ -149,6 +149,7 @@ void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
 
 // send a SPI message to the other device - 3 bytes then go back into
 // slave mode
+
 
 void send_message(void)
 {
@@ -372,7 +373,7 @@ int main (void)
 	
 	slaveinit();
 	
-	spi_init(SPI_MODE_1, SPI_MSB, SPI_INTERRUPT, 0);
+	//spi_init(SPI_MODE_1, SPI_MSB, SPI_INTERRUPT, 0);
    
    MCP3208_spi_Init();
    
