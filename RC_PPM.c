@@ -519,13 +519,13 @@ int main (void)
          
          if (loopcount1%0x1F == 0)
          {
-            /*
+            
             lcd_gotoxy(0,1);
             lcd_putint16(POT_Array[0]);
             lcd_putc('*');
             lcd_putint16(POT_Array[1]);
             lcd_putc('*');
-             */
+             
          }
          
          for (int i=0;i<8;i++)
@@ -616,9 +616,9 @@ int main (void)
          potstatus &= ~(1<< POT_START);
          
          // Daten an RAM
-         cli();
+         //cli();
          
-         spiram_init();
+        
          
          
          SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN); // SS LO, Start
@@ -666,7 +666,7 @@ int main (void)
          
          uint8_t code = 0x00;
          code = buffer[2];
-         lcd_gotoxy(0,1);
+         lcd_gotoxy(12,0);
          lcd_puthex(code);
          lcd_putc('0');
          lcd_puthex(buffer[4]);
