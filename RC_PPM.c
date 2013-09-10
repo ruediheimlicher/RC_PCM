@@ -25,11 +25,12 @@
 
 //#include "spi.c"
 #include "spi_adc.c"
-
+#include "spi_ram.c"
 
 // USB
 #define CPU_PRESCALE(n)	(CLKPR = 0x80, CLKPR = (n))
 
+#define LOOPDELAY 0
 
 volatile uint8_t do_output=0;
 static volatile uint8_t buffer[32]={};
@@ -68,6 +69,8 @@ volatile char SPI_data='0';
 volatile char SPI_dataArray[SPI_BUFSIZE];
 volatile uint16_t POT_Array[SPI_BUFSIZE];
 volatile uint16_t Mitte_Array[SPI_BUFSIZE];
+
+volatile uint16_t RAM_Array[SPI_BUFSIZE];
 
 volatile uint16_t Batteriespannung =0;
 volatile short int received=0;
@@ -130,7 +133,34 @@ void slaveinit(void)
    
    ADC_DDR &= ~(1<<PORTF0);
    
+  
 }
+
+void SPI_PORT_Init(void) // SPI-Pins aktivieren
+{
+   //http://www.atmel.com/dyn/resources/prod_documents/doc2467.pdf  page:165
+   //Master init
+   // Set MOSI and SCK output, all others input
+   SPI_DDR &= ~(1<<SPI_MISO_PIN);
+   SPI_PORT &= ~(1<<SPI_MISO_PIN); // HI
+   
+   SPI_DDR |= (1<<SPI_MOSI_PIN);
+   
+   
+   SPI_DDR |= (1<<SPI_SCK_PIN);
+   SPI_PORT &= ~(1<<SPI_SCK_PIN); // LO
+   
+   SPI_DDR |= (1<<SPI_SS_PIN);
+   SPI_PORT |= (1<<SPI_SS_PIN); // HI
+   
+}
+
+void SPI_RAM_init(void) // SS-Pin fuer RAM aktivieren
+{
+   SPI_RAM_DDR |= (1<<SPI_RAM_CS_PIN); // RAM-CS-PIN Ausgang
+   SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN);// HI
+}
+
 
 
 
@@ -153,7 +183,7 @@ void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
 
 void send_message(void)
 {
-   spi_init(SPI_MODE_1, SPI_MSB, SPI_NO_INTERRUPT, SPI_MSTR_CLK8);
+   spi_init_old(SPI_MODE_1, SPI_MSB, SPI_NO_INTERRUPT, SPI_MSTR_CLK8);
    if (SPCR & (1<<MSTR)) { // if we are still in master mode
       send_spi(READ_ADC_COMMAND);
       send_spi(0x02);
@@ -373,15 +403,26 @@ int main (void)
 	
 	slaveinit();
 	
-	//spi_init(SPI_MODE_1, SPI_MSB, SPI_INTERRUPT, 0);
+   
+   SPI_PORT_Init(); //Pins fuer SPI aktivieren, incl. SS
+   
+   SPI_RAM_init(); // SS-Pin fuer RAM aktivieren
+
    
    MCP3208_spi_Init();
    
+   SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN);
+   _delay_us(10);
+   
+   spiram_init();
+   
+   SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN);
+   _delay_us(10);
 	/* initialize the LCD */
 	lcd_initialize(LCD_FUNCTION_8x2, LCD_CMD_ENTRY_INC, LCD_CMD_ON);
 
 	lcd_puts("Guten Tag\0");
-	delay_ms(100);
+	delay_ms(1000);
 	lcd_cls();
 	//lcd_puts("READY\0");
 	lcd_puts("V: \0");
@@ -446,7 +487,8 @@ int main (void)
 			loopcount1+=1;
 			LOOPLEDPORT ^=(1<<LOOPLED);
          PORTD ^= (1<<PORTD6);
-			//
+         
+ 			//
 			//timer0();
          
          if (loopcount1%0x0F == 0)
@@ -488,13 +530,17 @@ int main (void)
          
          for (int i=0;i<8;i++)
          {
-            
             sendbuffer[8+2*i]=(POT_Array[i] & 0xFF);    // 8 10
             sendbuffer[8+2*i+1]= (POT_Array[i]>>8) & 0xFF;  // 9  11
-            
          }
          //OSZI_B_LO;
          usb_rawhid_send((void*)sendbuffer, 50); // 20 us
+         
+         
+         
+         
+         
+         
 		//OSZI_B_HI;
       }
       
@@ -532,9 +578,9 @@ int main (void)
             //lcd_putint(i);
             if (i<2)
             {
-               //POT_Array[i] = MCP3208_spiRead(SingleEnd,i);
+               POT_Array[i] = MCP3208_spiRead(SingleEnd,i);
                // Filter
-               POT_Array[i] = 3*POT_Array[i]/4 + (MCP3208_spiRead(SingleEnd,i)/4);
+               //POT_Array[i] = 3*POT_Array[i]/4 + (MCP3208_spiRead(SingleEnd,i)/4);
                _delay_us(100);
             }
             else
@@ -566,12 +612,33 @@ int main (void)
              */
          }
          
-         //usb_rawhid_send((void*)sendbuffer, 50);
+         usb_rawhid_send((void*)sendbuffer, 50);
          potstatus &= ~(1<< POT_START);
          
+         // Daten an RAM
+         cli();
+         
+         spiram_init();
          
          
+         SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN); // SS LO, Start
+         spiram_init();
+         SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN); // SS HI End
          
+         _delay_us(20);
+         
+         SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN);
+        //
+          
+        // spiram_wrbyte(abschnittnummer, abschnittnummer & 0xFF);
+         _delay_us(10);
+         
+         RAM_Array[0] = spiram_rdbyte(abschnittnummer);
+         _delay_us(100);
+
+         SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN);
+         
+         sei();
          timer1_init();
         //PORTD &= ~(1<<PORTD5); //  LO
          
@@ -629,7 +696,7 @@ int main (void)
                
                //sendbuffer[8]= versionintl;
                //sendbuffer[9]= versioninth;
-               usb_rawhid_send((void*)sendbuffer, 50); // nicht jedes Paket melden
+               //usb_rawhid_send((void*)sendbuffer, 50); // nicht jedes Paket melden
                
              
                

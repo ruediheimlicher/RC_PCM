@@ -52,3 +52,5 @@
 #define POT_MITTE 7  //    Mittelwerte der Potentiometer speichern
 
 #define ANZ_POT   6
+
+

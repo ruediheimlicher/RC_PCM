@@ -12,10 +12,10 @@
  Copyright (C) 2011 David DiPaola
  
  ***/
-#define SPI_RAM_DDR            DDRE    //Port E
+#define SPI_RAM_DDR            DDRE    //DDR E
 #define SPI_RAM_PORT           PORTE   //PORT E
 
- #define SPI_RAM_CS_PIN                 7
+#define SPI_RAM_CS_PIN                         7
 
 
 //NOTE: the CS pin on the 23K256 must be brought low before every function
@@ -28,7 +28,11 @@
 //                 1 - sequential mode
 //                 2 - page mode
 //  uint8_t enhold - if 1: disables the hold pin, 0 enables
-void spiram_init(uint8_t mode, uint8_t enhold);
+//void spiram_init(uint8_t mode, uint8_t enhold);
+
+void spiram_init(void);
+                 
+                 
 
 //write a memory location
 // uint16_t addr - the address to write to

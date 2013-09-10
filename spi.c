@@ -10,9 +10,26 @@ extern "C"{
 #endif
 
 
+   
+void spi_init()
+{
+   
+   SPCR=0;
+   SPCR = (1<<SPE)|(1<<MSTR)|(1<<SPR0);//|(1<<SPR1);
+   
+   //SPCR |= (1<<CPOL); // Gleich wie CKP
+   
+   //SPCR |= (1<<CPHA); // Gegenteil von CKE
+   
+}
+
+   
+   
+   
+   
 // von http://sites.google.com/site/qeewiki/books/avr-guide/spi
 
-void spi_init(uint8_t mode, int dord, int interrupt, uint8_t clock)
+void spi_init_old(uint8_t mode, int dord, int interrupt, uint8_t clock)
 {
   // specify pin directions for SPI pins on spi port
   if (clock == SPI_SLAVE) 
@@ -42,7 +59,7 @@ void spi_init(uint8_t mode, int dord, int interrupt, uint8_t clock)
     | (dord<<DORD) // LSB or MSB
     | (((clock != SPI_SLAVE) ? 1 : 0) <<MSTR) // Slave or Master
     | (((mode & 0x02) == 2) << CPOL) // clock timing mode CPOL
-    | (((mode & 0x01)) << CPHA) // clock timing mode CPHA
+    //| (((mode & 0x01)) << CPHA) // clock timing mode CPHA
     | (((clock & 0x02) == 2) << SPR1) // cpu clock divisor SPR1
     | ((clock & 0x01) << SPR0); // cpu clock divisor SPR0
   SPSR = (((clock & 0x04) == 4) << SPI2X); // clock divisor SPI2X
@@ -65,3 +82,4 @@ uint8_t received_from_spi(uint8_t data)
   SPDR = data;
   return SPDR;
 }
+   

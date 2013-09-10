@@ -67,7 +67,7 @@ extern "C"{
 #define READ_ADC_COMMAND 0x01
 
 // setup spi
-void spi_init(uint8_t mode,   // timing mode SPI_MODE[0-4]
+void spi_init_old(uint8_t mode,   // timing mode SPI_MODE[0-4]
 	       int dord,             // data direction SPI_LSB|SPI_MSB
 	       int interrupt,        // whether to raise interrupt on recieve
 	       uint8_t clock); // clock diviser
@@ -83,6 +83,14 @@ uint8_t send_spi(uint8_t out);
 // when interrupts are enabled.
 uint8_t received_from_spi(uint8_t out);
 
+   
+   
+void spi_init(void);
+uint8_t spiram_read_status(void);
+   void spiram_write_status(uint8_t mode);
+   void spiram_wrbyte(uint16_t addr, uint8_t data);
+   uint8_t spiram_rdbyte(uint16_t addr);
+   
 #ifdef __cplusplus
 } // extern "C"
 #endif

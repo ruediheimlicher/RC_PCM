@@ -22,6 +22,7 @@ void MCP3208_spi_Init(void)
    // Enable SPI, Master, set clock rate fclk/64
    // Setup (Falling) Sample (Rising) SPI set mode 3
    // CPOL=1 : CPHA=1
+   SPCR=0;
    SPCR = (1<<SPE)|(1<<MSTR)|(1<<SPR1)|(0<<SPR0)|(1<<CPOL)|(1<<CPHA);
    SPI_PORT |= (1<<(SPI_SS_PIN));    //setbitHigh CS   Pin
    SPI_PORT |= (1<<(SPI_MOSI_PIN));  //setbitHigh MOSI Pin
