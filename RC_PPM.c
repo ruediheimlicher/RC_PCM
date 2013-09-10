@@ -517,15 +517,15 @@ int main (void)
          sendbuffer[6] = (adc0wert>>8) & 0xFF;
 
          
-         if (loopcount1%0x1F == 0)
+         if (loopcount1%0xF == 0)
          {
-            /*
+            
             lcd_gotoxy(0,1);
             lcd_putint16(POT_Array[0]);
             lcd_putc('*');
             lcd_putint16(POT_Array[1]);
             lcd_putc('*');
-             */
+             
          }
          
          for (int i=0;i<8;i++)
@@ -599,45 +599,29 @@ int main (void)
          
          if (anzeigecounter %0xF ==0)
          {
-            //lcd_gotoxy(0,1);
+            lcd_gotoxy(0,1);
              if (usbstatus & (1<<USB_SEND))
              {
                 //lcd_putc('+');
                 usbstatus &= ~(1<<USB_SEND);
              }
-            /*
-            lcd_putint12Bit(POT_Array[0]);
-            lcd_putc(' ');
-            lcd_putint12Bit(POT_Array[1]);
-             */
+            
+            //lcd_putint12Bit(POT_Array[0]);
+            //lcd_putc(' ');
+            //lcd_putint12Bit(POT_Array[1]);
+             
          }
          
-         usb_rawhid_send((void*)sendbuffer, 50);
+         //usb_rawhid_send((void*)sendbuffer, 50);
          potstatus &= ~(1<< POT_START);
          
          // Daten an RAM
-         cli();
+         //cli();
          
-         spiram_init();
+//        spiram_init();
          
          
-         SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN); // SS LO, Start
-         spiram_init();
-         SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN); // SS HI End
-         
-         _delay_us(20);
-         
-         SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN);
-        //
-          
-        // spiram_wrbyte(abschnittnummer, abschnittnummer & 0xFF);
-         _delay_us(10);
-         
-         RAM_Array[0] = spiram_rdbyte(abschnittnummer);
-         _delay_us(100);
-
-         SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN);
-         
+           
          sei();
          timer1_init();
         //PORTD &= ~(1<<PORTD5); //  LO
@@ -666,9 +650,9 @@ int main (void)
          
          uint8_t code = 0x00;
          code = buffer[2];
-         lcd_gotoxy(0,1);
+         lcd_gotoxy(14,0);
          lcd_puthex(code);
-         lcd_putc('0');
+         lcd_putc('*');
          lcd_puthex(buffer[4]);
          switch (code)
          {   
