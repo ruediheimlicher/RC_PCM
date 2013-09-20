@@ -40,6 +40,16 @@
 #define CMD_DDR             DDRD    //    DDRB
 #define CMD_PIN             PIND    //    PINB
 
+
+#define KANAL_PORT            PORTB   //    PORTB
+#define KANAL_DDR             DDRB    //    DDRB
+
+
+#define KANAL_PIN          4
+#define KANAL_LO           KANAL_PORT &= ~(1<<KANAL_PIN)
+#define KANAL_HI           KANAL_PORT |= (1<<KANAL_PIN)
+
+
 // ADC
 // CNC12
 #define ADC_PORT            PORTF   //    PORTF
@@ -52,5 +62,7 @@
 #define POT_MITTE 7  //    Mittelwerte der Potentiometer speichern
 
 #define ANZ_POT   6
+
+#define POT_FAKTOR 1.40
 
 

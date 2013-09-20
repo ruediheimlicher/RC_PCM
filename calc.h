@@ -7,3 +7,4 @@
  *
  */
 
+#define EXP_A   1

@@ -16,6 +16,7 @@
 #include <avr/eeprom.h>
 #include <inttypes.h>
 #include <avr/wdt.h>
+#include <math.h>
 
 #include "lcd.c"
 #include "adc.c"
@@ -30,7 +31,7 @@
 // USB
 #define CPU_PRESCALE(n)	(CLKPR = 0x80, CLKPR = (n))
 
-#define LOOPDELAY 0
+#define LOOPDELAY 10
 
 volatile uint8_t do_output=0;
 static volatile uint8_t buffer[32]={};
@@ -56,7 +57,7 @@ volatile uint8_t           usbstatus=0x00;
 static volatile uint8_t    potstatus=0x80; // Bit 7 gesetzt, Mittelwerte setzen
 static volatile uint8_t    impulscounter=0x00;
 
-#define USB_SEND  0 
+#define USB_RECV  0 
 
 volatile uint8_t status=0;
 
@@ -133,6 +134,10 @@ void slaveinit(void)
    
    ADC_DDR &= ~(1<<PORTF0);
    
+   
+   DDRE |= (1<<PORTE0);
+   PORTE &= ~(1<<PORTE0);
+
   
 }
 
@@ -183,7 +188,7 @@ void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
 
 void send_message(void)
 {
-   spi_init_old(SPI_MODE_1, SPI_MSB, SPI_NO_INTERRUPT, SPI_MSTR_CLK8);
+  // spi_init_old(SPI_MODE_1, SPI_MSB, SPI_NO_INTERRUPT, SPI_MSTR_CLK8);
    if (SPCR & (1<<MSTR)) { // if we are still in master mode
       send_spi(READ_ADC_COMMAND);
       send_spi(0x02);
@@ -222,12 +227,14 @@ ISR(SPI_STC_vect)
 
 void timer1_init(void)
 {
+
    // Quelle http://www.mikrocontroller.net/topic/103629
    
+   OSZI_A_HI ; // Test: data fuer SR
+   _delay_us(5);
    //#define FRAME_TIME 20 // msec
-   DDRB |= (1<<PORTB5); // OC1A Ausgang
-   PORTB |= (1<<PORTB5); // OC1A Ausgang
-   
+   KANAL_DDR |= (1<<KANAL_PIN); // Kanal Ausgang
+      
    DDRD |= (1<<PORTD5); //  Ausgang
    PORTD |= (1<<PORTD5); //  Ausgang
 
@@ -241,11 +248,21 @@ void timer1_init(void)
    
    TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt:
    TIMSK1 |= (1 << OCIE1B);  // enable timer compare interrupt:
-   OSZI_A_LO ;
+   
+   //KANAL_PORT |= (1<<PORTB5); // Ausgang HI
+   //OSZI_A_LO ;
    OSZI_B_LO ;
-
+   PORTE &= ~(1<<PORTE0); //
+   
+   
+   KANAL_HI;
+   
    impulscounter = 0;
-   OCR1A  = 2.141*POT_Array[impulscounter];
+   OCR1A  = POT_FAKTOR*POT_Array[impulscounter];
+   //OCR1A  = POT_Array[impulscounter]; // POT_Faktor schon nach ADC
+      
+   
+
 
 } // end timer1
 
@@ -262,20 +279,38 @@ ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
 {
    
    impulscounter++;
+   
    if (impulscounter < ANZ_POT)
    {
-      OSZI_A_LO ;
-      // Laenge des naechsten Impuls setzen
-      OCR1A  = 2.141*POT_Array[impulscounter];
+      // Start Impuls
+      
       TCNT1  = 0;
+      KANAL_HI;
+            
+      // Laenge des naechsten Impuls setzen
+      
+      OCR1A  = POT_FAKTOR*POT_Array[impulscounter]; // 18 us
+      //OCR1A  = POT_Array[impulscounter]; // 18 us
+      
+      
    }
    else
    {
-      OSZI_A_HI ;
+      // Ende Impulspaket
       
+      //OSZI_A_HI ;
+      KANAL_LO;
+      //PORTB &= ~(1<<PORTB5); // Ausgang LO
       // Alle Impulse gesendet, Timer1 stop. Timer1 wird bei Beginn des naechsten Paketes wieder gestartet 
       timer1_stop();
       OSZI_B_HI ;
+      
+     // reset fuer 4017
+      PORTE |= (1<<PORTE0);
+      _delay_us(10);
+      PORTE &= ~(1<<PORTE0);
+      
+      OSZI_A_LO ;
    }
    
    //OSZI_B_LO ;
@@ -288,9 +323,11 @@ ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
 ISR(TIMER1_COMPB_vect)	 //Ende des Kanalimpuls. ca 0.3 us
 {
    //OSZI_A_LO ;
-   PORTB |= (1<<PORTB5); // OC1A Ausgang
+   //PORTB &= ~(1<<PORTB5); // OC1A Ausgang
+   //OSZI_A_HI ;
+   KANAL_LO;
    
-   OSZI_A_HI ;
+   OSZI_A_LO ;
 }
 
 
@@ -407,6 +444,11 @@ int main (void)
    SPI_PORT_Init(); //Pins fuer SPI aktivieren, incl. SS
    
    SPI_RAM_init(); // SS-Pin fuer RAM aktivieren
+   volatile    uint8_t outcounter=0;
+   volatile   uint8_t testdata =0x00;
+   volatile   uint8_t testaddress =0x00;
+   volatile   uint8_t errcount =0x00;
+   volatile uint8_t indata=0;
 
    
    MCP3208_spi_Init();
@@ -517,32 +559,31 @@ int main (void)
          sendbuffer[6] = (adc0wert>>8) & 0xFF;
 
          
+         // Messung anzeigen
          if (loopcount1%0xF == 0)
          {
-            
+            /*
             lcd_gotoxy(0,1);
             lcd_putint16(POT_Array[0]);
             lcd_putc('*');
             lcd_putint16(POT_Array[1]);
             lcd_putc('*');
-             
+             */
          }
          
+         // neue Daten in sendbuffer
          for (int i=0;i<8;i++)
          {
             sendbuffer[8+2*i]=(POT_Array[i] & 0xFF);    // 8 10
             sendbuffer[8+2*i+1]= (POT_Array[i]>>8) & 0xFF;  // 9  11
          }
          //OSZI_B_LO;
+         
+         // neue Daten abschicken
          usb_rawhid_send((void*)sendbuffer, 50); // 20 us
          
-         
-         
-         
-         
-         
 		//OSZI_B_HI;
-      }
+      } // if loopcount0
       
       /**	ADC	***********************/
 
@@ -573,15 +614,18 @@ int main (void)
       {
          //OSZI_A_LO ;
          uint8_t i=0;
+         
+         spiadc_init();
          for(i=0;i< ANZ_POT;i++)
          {
             //lcd_putint(i);
             if (i<2)
             {
-               POT_Array[i] = MCP3208_spiRead(SingleEnd,i);
+               //POT_Array[i] = MCP3208_spiRead(SingleEnd,i);
                // Filter
                //POT_Array[i] = 3*POT_Array[i]/4 + (MCP3208_spiRead(SingleEnd,i)/4);
-               _delay_us(100);
+               POT_Array[i] = (1*POT_Array[i]/2 + (MCP3208_spiRead(SingleEnd,i)/2));
+               _delay_us(50); // war mal 100
             }
             else
             {
@@ -599,11 +643,11 @@ int main (void)
          
          if (anzeigecounter %0xF ==0)
          {
-            lcd_gotoxy(0,1);
-             if (usbstatus & (1<<USB_SEND))
+            //lcd_gotoxy(0,1);
+             if (usbstatus & (1<<USB_RECV))
              {
                 //lcd_putc('+');
-                usbstatus &= ~(1<<USB_SEND);
+                usbstatus &= ~(1<<USB_RECV);
              }
             
             //lcd_putint12Bit(POT_Array[0]);
@@ -612,18 +656,76 @@ int main (void)
              
          }
          
-         //usb_rawhid_send((void*)sendbuffer, 50);
+         
+         
+         
+         ///usb_rawhid_send((void*)sendbuffer, 50); // in loopcount0
          potstatus &= ~(1<< POT_START);
          
          // Daten an RAM
          //cli();
          
-//        spiram_init();
+        spiram_init();
+         
+         // statusregister schreiben
+         CS_LO;
+         _delay_us(LOOPDELAY);
+         spiram_write_status(0x00);
+         _delay_us(LOOPDELAY);
+         CS_HI; // SS HI End
+         _delay_us(50);
+      
+         
+         // testdata in-out
+         CS_LO;
+         
+         _delay_us(LOOPDELAY);
+   //      OSZI_A_LO;
+         spiram_wrbyte(testaddress, testdata);
+    //     OSZI_A_HI;
+         CS_HI;
+         _delay_us(50);
+         CS_LO;
+         _delay_us(LOOPDELAY);
+    //     OSZI_B_LO;
+         _delay_us(LOOPDELAY);
+         indata = spiram_rdbyte(testaddress);
+         _delay_us(LOOPDELAY);
+    //     OSZI_B_HI;
+         CS_HI;
+
+         // Fehler zaehlen
+         if (!(testdata == indata))
+         {
+            errcount++;
+         }
+         
+         // Daten aendern
+         if (outcounter%16 == 0)
+         {
+            testdata++;
+            testaddress--;
+            
+            /*
+            lcd_gotoxy(0,0);
+            lcd_putint(testdata);
+            lcd_putc('*');
+            lcd_putint(indata);
+            lcd_putc('*');
+            lcd_putint(errcount);
+            lcd_putc('*');
+            */
+         }
+          outcounter++;
+         
+         _delay_us(LOOPDELAY);
+
          
          
-           
+         // end Daten an RAM
          sei();
-         timer1_init();
+         timer1_init(); // Kanaele starten
+         
         //PORTD &= ~(1<<PORTD5); //  LO
          
          
@@ -644,7 +746,7 @@ int main (void)
       //OSZI_B_HI;
       if (r > 0) 
       {
-         usbstatus |= (1<<USB_SEND);
+         usbstatus |= (1<<USB_RECV);
         
          cli(); 
          
@@ -743,7 +845,7 @@ int main (void)
                {
                   //sendbuffer[0]=loopcount1;
                   //sendbuffer[1]=0xAB;
-                  //usbstatus |= (1<<USB_SEND);
+                  //usbstatus |= (1<<USB_RECV);
                   //lcd_gotoxy(2,1);
                   //lcd_putc('1');
 
@@ -808,7 +910,7 @@ int main (void)
 		//lcd_putint(Tastenwert);
    
 		//OSZI_B_HI;
-      if (usbstatus & (1<< USB_SEND))
+      if (usbstatus & (1<< USB_RECV))
       {
          //lcd_gotoxy(10,1);
          //lcd_puthex(AbschnittCounter);
@@ -817,7 +919,7 @@ int main (void)
          //sendbuffer[0]=0;
          //sendbuffer[5]=0;
          //sendbuffer[6]=0;
-         //usbstatus &= ~(1<< USB_SEND);
+         //usbstatus &= ~(1<< USB_RECV);
          
       }
 

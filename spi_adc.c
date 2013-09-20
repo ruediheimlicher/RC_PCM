@@ -14,6 +14,13 @@ void MCP3208_spiDelay(unsigned int NOPcount)
    }
 }
 
+void spiadc_init()
+{
+   SPCR=0;
+   SPCR = (1<<SPE)|(1<<MSTR)|(1<<SPR1)|(0<<SPR0)|(1<<CPOL)|(1<<CPHA);
+   
+}
+
 void MCP3208_spi_Init(void)
 {
    // Set MOSI, SCK and SS output, all other input

@@ -49,21 +49,11 @@
 #define SPI_INTERRUPT 1
 
 
-//#define PORT_SPI     PORTB       // SPI PORT
-//#define PIN_CS       PINB4       // SPI PIN for CS
-//#define PIN_MOSI     PINB5       // SPI PIN for MOSI
-//#define PIN_CLK      PINB7       // SPI PIN for CLK
-
-/*
-#define DDR_SPI      DDRB        // DDR control SPI PORT
-#define DD_SS        DDB4        // DDR control SS  (CS)  pin(PB4)
-#define DD_MOSI      DDB5        // DDR control MOSI(DO)  pin(PB5)
-#define DD_MISO      DDB6        // DDR control MISO(DI)  pin(PB6)
-#define DD_SCK       DDB7        // DDR control SCK (CLK) pin(PB7)
-*/
 #define delayCount   ((F_CPU)/1000000UL)
 
 volatile unsigned char gReciveHighByte, gReciveLowByte; // global Variables
+
+void spiadc_init(void);
 
 void MCP3208_spiDelay(unsigned int NOPcount);
 void MCP3208_spiInit(void);
