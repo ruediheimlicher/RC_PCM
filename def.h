@@ -63,6 +63,6 @@
 
 #define ANZ_POT   6
 
-#define POT_FAKTOR 1.40
+#define POT_FAKTOR 1.20
 
 

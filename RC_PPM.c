@@ -258,8 +258,9 @@ void timer1_init(void)
    KANAL_HI;
    
    impulscounter = 0;
-   OCR1A  = POT_FAKTOR*POT_Array[impulscounter];
-   //OCR1A  = POT_Array[impulscounter]; // POT_Faktor schon nach ADC
+   //OCR1A  = POT_FAKTOR*POT_Array[1];
+   //OCR1A  = POT_FAKTOR*POT_Array[impulscounter];
+   OCR1A  = POT_Array[impulscounter]; // POT_Faktor schon nach ADC
       
    
 
@@ -289,8 +290,9 @@ ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
             
       // Laenge des naechsten Impuls setzen
       
-      OCR1A  = POT_FAKTOR*POT_Array[impulscounter]; // 18 us
-      //OCR1A  = POT_Array[impulscounter]; // 18 us
+      //OCR1A  = POT_FAKTOR*POT_Array[1]; // 18 us
+      //OCR1A  = POT_FAKTOR*POT_Array[impulscounter]; // 18 us
+      OCR1A  = POT_Array[impulscounter]; // 18 us
       
       
    }
@@ -564,9 +566,9 @@ int main (void)
          {
             /*
             lcd_gotoxy(0,1);
-            lcd_putint16(POT_Array[0]);
+            lcd_putint12Bit(POT_Array[0]);
             lcd_putc('*');
-            lcd_putint16(POT_Array[1]);
+            lcd_putint12Bit(POT_Array[1]);
             lcd_putc('*');
              */
          }
@@ -621,11 +623,11 @@ int main (void)
             //lcd_putint(i);
             if (i<2)
             {
-               //POT_Array[i] = MCP3208_spiRead(SingleEnd,i);
+               POT_Array[i] = POT_FAKTOR*MCP3208_spiRead(SingleEnd,i);
                // Filter
                //POT_Array[i] = 3*POT_Array[i]/4 + (MCP3208_spiRead(SingleEnd,i)/4);
-               POT_Array[i] = (1*POT_Array[i]/2 + (MCP3208_spiRead(SingleEnd,i)/2));
-               _delay_us(50); // war mal 100
+               //POT_Array[i] = POT_FAKTOR*(1*POT_Array[i]/2 + (MCP3208_spiRead(SingleEnd,i)/2));
+               _delay_us(2); // war mal 100
             }
             else
             {
