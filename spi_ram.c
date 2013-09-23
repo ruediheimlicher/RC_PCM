@@ -130,8 +130,6 @@ void spiram_wrbyte(uint16_t addr, uint8_t data)
    _delay_us(RAMDELAY);
    spi_send(addr); //least significant byte
    _delay_us(RAMDELAY);
-   //   spi_send(addr); //least significant byte
-   //   _delay_us(10);
    
    //send data
    spi_send(data);

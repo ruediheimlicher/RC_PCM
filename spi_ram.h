@@ -18,8 +18,8 @@
 #define SPI_RAM_CS_PIN                         7
 
 
-#define CS_HI SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN)
-#define CS_LO SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN)
+#define RAM_CS_HI SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN)
+#define RAM_CS_LO SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN)
 
 
 //NOTE: the CS pin on the 23K256 must be brought low before every function

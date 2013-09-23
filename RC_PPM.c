@@ -27,11 +27,12 @@
 //#include "spi.c"
 #include "spi_adc.c"
 #include "spi_ram.c"
+#include "spi_eeprom.c"
 
 // USB
 #define CPU_PRESCALE(n)	(CLKPR = 0x80, CLKPR = (n))
 
-#define LOOPDELAY 10
+#define LOOPDELAY 1
 
 volatile uint8_t do_output=0;
 static volatile uint8_t buffer[32]={};
@@ -52,8 +53,9 @@ volatile uint8_t timer0startwert=TIMER0_STARTWERT;
 void delay_ms(unsigned int ms);
 
 volatile uint8_t           adcstatus=0x00;
+static volatile uint8_t           usbstatus=0x00;
 
-volatile uint8_t           usbstatus=0x00;
+static volatile uint8_t      eepromstatus=0x00;
 static volatile uint8_t    potstatus=0x80; // Bit 7 gesetzt, Mittelwerte setzen
 static volatile uint8_t    impulscounter=0x00;
 
@@ -114,11 +116,18 @@ void slaveinit(void)
 	
    OSZIPORTDDR |= (1<<OSZI_PULS_B);		//Pin 1 von  als Ausgang fuer LED TWI
    OSZIPORT |= (1<<OSZI_PULS_B);		//Pin   von   als Ausgang fuer OSZI
-	
    
+   
+   OSZIPORTDDR |= (1<<OSZI_PULS_C);		//Pin 1 von  als Ausgang fuer LED TWI
+   OSZIPORT |= (1<<OSZI_PULS_C);		//Pin   von   als Ausgang fuer OSZI
+   
+   OSZIPORTDDR |= (1<<OSZI_PULS_D);		//Pin 1 von  als Ausgang fuer LED TWI
+   OSZIPORT |= (1<<OSZI_PULS_D);		//Pin   von   als Ausgang fuer OSZI
+	
+   /*
 	TASTENDDR &= ~(1<<TASTE0);	//Bit 0 von PORT B als Eingang fŸr Taste 0
 	TASTENPORT |= (1<<TASTE0);	//Pull-up
-   
+   */
    //	DDRB &= ~(1<<PORTB1);	//Bit 1 von PORT B als Eingang fŸr Taste 1
    //	PORTB |= (1<<PORTB1);	//Pull-up
 	
@@ -166,6 +175,12 @@ void SPI_RAM_init(void) // SS-Pin fuer RAM aktivieren
    SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN);// HI
 }
 
+void SPI_EE_init(void) // SS-Pin fuer EE aktivieren
+{
+   SPI_EE_DDR |= (1<<SPI_EE_CS_PIN); // EE-CS-PIN Ausgang
+   SPI_EE_PORT |= (1<<SPI_EE_CS_PIN);// HI
+}
+
 
 
 
@@ -182,48 +197,9 @@ void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
 
 // http://www.co-pylit.org/courses/COSC2425/lectures/AVRNetworks/index.html
 
-// send a SPI message to the other device - 3 bytes then go back into
-// slave mode
 
 
-void send_message(void)
-{
-  // spi_init_old(SPI_MODE_1, SPI_MSB, SPI_NO_INTERRUPT, SPI_MSTR_CLK8);
-   if (SPCR & (1<<MSTR)) { // if we are still in master mode
-      send_spi(READ_ADC_COMMAND);
-      send_spi(0x02);
-      send_spi(0x00);
-   }
-   //spi_init(SPI_MODE_1, SPI_MSB, SPI_INTERRUPT, SPI_SLAVE);
-   //flash_led(5);
-}
 
-void parse_message(void)
-{
-   switch(SPI_dataArray[0])
-   {
-      case 0:
-      {
-         
-      }break;
-      default:
-      {
-         
-      }}
-}
-
-
-ISR(SPI_STC_vect)
-{
-   
-//   SPI_dataArray[received++] = received_from_spi(0x00);
-   
-//   if (received >= SPI_BUFSIZE || SPI_dataArray[received-1] == 0x00)
-   {
-//      parse_message();
-//      received = 0;
-   }
-}
 
 void timer1_init(void)
 {
@@ -238,7 +214,6 @@ void timer1_init(void)
    DDRD |= (1<<PORTD5); //  Ausgang
    PORTD |= (1<<PORTD5); //  Ausgang
 
-   //ICR1   = FRAME_TIME * 1200;								// PWM cycle time in usec, 50 ms
    TCCR1A = (1<<COM1A0) | (1<<COM1A1);// | (1<<WGM11);	// OC1B set on match, set on TOP
    TCCR1B = (1<<WGM13) | (1<<WGM12) | (1<<CS11);		// TOP = ICR1, clk = sysclk/8 (->1us)
    TCNT1  = 0;														// reset Timer
@@ -446,11 +421,18 @@ int main (void)
    SPI_PORT_Init(); //Pins fuer SPI aktivieren, incl. SS
    
    SPI_RAM_init(); // SS-Pin fuer RAM aktivieren
+   
+   SPI_EE_init();
+   
    volatile    uint8_t outcounter=0;
    volatile   uint8_t testdata =0x00;
    volatile   uint8_t testaddress =0x00;
    volatile   uint8_t errcount =0x00;
-   volatile uint8_t indata=0;
+   volatile uint8_t ram_indata=0;
+
+   volatile uint8_t eeprom_indata=0;
+   volatile   uint8_t eeprom_testdata =0x00;
+   volatile   uint8_t eeprom_testaddress =0x00;
 
    
    MCP3208_spi_Init();
@@ -670,34 +652,36 @@ int main (void)
         spiram_init();
          
          // statusregister schreiben
-         CS_LO;
+         RAM_CS_LO;
          _delay_us(LOOPDELAY);
          spiram_write_status(0x00);
          _delay_us(LOOPDELAY);
-         CS_HI; // SS HI End
+         RAM_CS_HI; // SS HI End
          _delay_us(50);
       
          
          // testdata in-out
-         CS_LO;
+         RAM_CS_LO;
          
          _delay_us(LOOPDELAY);
    //      OSZI_A_LO;
          spiram_wrbyte(testaddress, testdata);
     //     OSZI_A_HI;
-         CS_HI;
+         RAM_CS_HI;
+         
+         // Kontrolle
          _delay_us(50);
-         CS_LO;
+         RAM_CS_LO;
          _delay_us(LOOPDELAY);
     //     OSZI_B_LO;
          _delay_us(LOOPDELAY);
-         indata = spiram_rdbyte(testaddress);
+         ram_indata = spiram_rdbyte(testaddress);
          _delay_us(LOOPDELAY);
     //     OSZI_B_HI;
-         CS_HI;
+         RAM_CS_HI;
 
          // Fehler zaehlen
-         if (!(testdata == indata))
+         if (!(testdata == ram_indata))
          {
             errcount++;
          }
@@ -708,23 +692,103 @@ int main (void)
             testdata++;
             testaddress--;
             
-            /*
+           
             lcd_gotoxy(0,0);
-            lcd_putint(testdata);
-            lcd_putc('*');
-            lcd_putint(indata);
-            lcd_putc('*');
+            //lcd_putint(testdata);
+            //lcd_putc('*');
+            //lcd_putint(ram_indata);
+            //lcd_putc('+');
             lcd_putint(errcount);
-            lcd_putc('*');
-            */
+            //lcd_putc('+');
+            
          }
           outcounter++;
          
          _delay_us(LOOPDELAY);
 
-         
-         
          // end Daten an RAM
+         
+         
+         // EEPROM Test
+         
+         if (eepromstatus & (1<<EE_WRITE)) // write an eeprom
+         {
+            eeprom_testdata++;
+            eeprom_testaddress--;
+           
+            eepromstatus &= ~(1<<EE_WRITE);
+            lcd_gotoxy(19,1);
+            lcd_putc((eeprom_testdata %10)+48);
+            //lcd_putc(48);
+            spieeprom_init();
+            
+            OSZI_C_LO;
+            // statusregister schreiben
+            
+            // WREN
+            EE_CS_LO;
+            _delay_us(LOOPDELAY);
+            spieeprom_wren();
+            _delay_us(LOOPDELAY);
+            EE_CS_HI; // SS HI End
+            _delay_us(LOOPDELAY);
+            
+            //Write status
+            EE_CS_LO;
+            _delay_us(LOOPDELAY);
+            spieeprom_write_status();
+            _delay_us(LOOPDELAY);
+            EE_CS_HI; // SS HI End
+            
+            
+            _delay_us(10);
+            
+            // Byte  write 
+            
+            // WREN schicken 220 us
+            EE_CS_LO;
+            _delay_us(LOOPDELAY);
+            spieeprom_wren();
+            _delay_us(LOOPDELAY);
+            EE_CS_HI; // SS HI End
+            _delay_us(LOOPDELAY);
+            
+            
+            // Data schicken 350 us
+            EE_CS_LO;
+            _delay_us(LOOPDELAY);
+            spieeprom_wrbyte(eeprom_testaddress, eeprom_testdata);
+            _delay_us(LOOPDELAY);
+            EE_CS_HI; // SS HI End
+            
+            
+            _delay_us(50);
+            
+            // Byte  read 270 us
+            EE_CS_LO;
+            _delay_us(LOOPDELAY);
+            //     OSZI_B_LO;
+            _delay_us(LOOPDELAY);
+            eeprom_indata = spieeprom_rdbyte(eeprom_testaddress);
+            _delay_us(LOOPDELAY);
+            //     OSZI_B_HI;
+            EE_CS_HI;
+            OSZI_C_HI;
+            
+            
+            lcd_gotoxy(0,1);
+            lcd_putc('*');
+            lcd_puthex(eeprom_testdata);
+
+            lcd_putc('*');
+            lcd_puthex(eeprom_indata);
+            lcd_putc('*');
+            
+            
+            // end Daten an EEPROM
+         } // EE_WRITE
+         
+         
          sei();
          timer1_init(); // Kanaele starten
          
@@ -753,7 +817,7 @@ int main (void)
          cli(); 
          
          uint8_t code = 0x00;
-         code = buffer[2];
+         code = buffer[31];
          lcd_gotoxy(14,0);
          lcd_puthex(code);
          lcd_putc('*');
@@ -761,9 +825,13 @@ int main (void)
          switch (code)
          {   
                
-            case 0xE0: // Man: Alles stoppen
+            case 0xA0: // Write EEPROM
             {
                
+               eepromstatus |= (1<<EE_WRITE);
+               lcd_gotoxy(18,1);
+               lcd_putc('E');
+               lcd_putc(' ');
             }break;
                
                
