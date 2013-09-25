@@ -53,11 +53,13 @@ volatile uint8_t timer0startwert=TIMER0_STARTWERT;
 void delay_ms(unsigned int ms);
 
 volatile uint8_t           adcstatus=0x00;
-static volatile uint8_t           usbstatus=0x00;
+static volatile uint8_t    usbstatus=0x00;
 
 static volatile uint8_t      eepromstatus=0x00;
 static volatile uint8_t    potstatus=0x80; // Bit 7 gesetzt, Mittelwerte setzen
 static volatile uint8_t    impulscounter=0x00;
+
+volatile uint8_t masterstatus = 0;
 
 #define USB_RECV  0 
 
@@ -128,9 +130,7 @@ void slaveinit(void)
 	TASTENDDR &= ~(1<<TASTE0);	//Bit 0 von PORT B als Eingang fŸr Taste 0
 	TASTENPORT |= (1<<TASTE0);	//Pull-up
    */
-   //	DDRB &= ~(1<<PORTB1);	//Bit 1 von PORT B als Eingang fŸr Taste 1
-   //	PORTB |= (1<<PORTB1);	//Pull-up
-	
+ 	
    
 	//LCD
 	LCD_DDR |= (1<<LCD_RSDS_PIN);		//Pin 4 von PORT D als Ausgang fuer LCD
@@ -144,8 +144,10 @@ void slaveinit(void)
    ADC_DDR &= ~(1<<PORTF0);
    
    
-   DDRE |= (1<<PORTE0);
-   PORTE &= ~(1<<PORTE0);
+   
+   MASTER_EN_DDR |= (1<<MASTER_EN_PIN); // Ausgang fuer Enabel-Signal an Sub
+   MASTER_EN_PORT |= (1<<MASTER_EN_PIN); // HI
+   
 
   
 }
@@ -203,6 +205,8 @@ void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
 
 void timer1_init(void)
 {
+   
+   MASTER_EN_PORT |= (1<<MASTER_EN_PIN); // Sub abstellen
 
    // Quelle http://www.mikrocontroller.net/topic/103629
    
@@ -227,7 +231,6 @@ void timer1_init(void)
    //KANAL_PORT |= (1<<PORTB5); // Ausgang HI
    //OSZI_A_LO ;
    OSZI_B_LO ;
-   PORTE &= ~(1<<PORTE0); //
    
    
    KANAL_HI;
@@ -254,6 +257,7 @@ void timer1_stop(void)
 ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
 {
    
+   KANAL_HI;
    impulscounter++;
    
    if (impulscounter < ANZ_POT)
@@ -261,50 +265,55 @@ ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
       // Start Impuls
       
       TCNT1  = 0;
-      KANAL_HI;
+      //KANAL_HI;
             
       // Laenge des naechsten Impuls setzen
       
       //OCR1A  = POT_FAKTOR*POT_Array[1]; // 18 us
       //OCR1A  = POT_FAKTOR*POT_Array[impulscounter]; // 18 us
-      OCR1A  = POT_Array[impulscounter]; // 18 us
       
-      
+      OCR1A  = POT_Array[impulscounter]; // 
    }
    else
    {
       // Ende Impulspaket
-      
+      OCR1A  = 0x4FF;
       //OSZI_A_HI ;
+      _delay_us(200);
       KANAL_LO;
-      //PORTB &= ~(1<<PORTB5); // Ausgang LO
-      // Alle Impulse gesendet, Timer1 stop. Timer1 wird bei Beginn des naechsten Paketes wieder gestartet 
+
+      // Alle Impulse gesendet, Timer1 stop. Timer1 wird bei Beginn des naechsten Paketes wieder gestartet
       timer1_stop();
       OSZI_B_HI ;
+      //OSZI_A_LO ;
       
-     // reset fuer 4017
-      PORTE |= (1<<PORTE0);
-      _delay_us(10);
-      PORTE &= ~(1<<PORTE0);
-      
-      OSZI_A_LO ;
+      MASTER_EN_PORT &= ~(1<<MASTER_EN_PIN); // Master schickt Enable an Slave
+
    }
    
    //OSZI_B_LO ;
-   _delay_us(10);
+   //_delay_us(10);
    
    
 }
 
 
-ISR(TIMER1_COMPB_vect)	 //Ende des Kanalimpuls. ca 0.3 us
+ISR(TIMER1_COMPB_vect)	 //Ende des Kanalimpuls. ca 0.3 ms
 {
    //OSZI_A_LO ;
    //PORTB &= ~(1<<PORTB5); // OC1A Ausgang
    //OSZI_A_HI ;
    KANAL_LO;
    
-   OSZI_A_LO ;
+   if (impulscounter < ANZ_POT)
+   {
+   }
+   else
+   {
+      timer1_stop();
+      OSZI_B_HI ;
+
+   }
 }
 
 
@@ -512,7 +521,7 @@ int main (void)
 			loopcount0=0;
 			loopcount1+=1;
 			LOOPLEDPORT ^=(1<<LOOPLED);
-         PORTD ^= (1<<PORTD6);
+         //PORTD ^= (1<<PORTD6);
          
  			//
 			//timer0();
@@ -530,18 +539,20 @@ int main (void)
             
          }
          
-         sendbuffer[0]=0x33;
-         sendbuffer[1]= abschnittnummer;
-         sendbuffer[2]= abschnittnummer>>8;
+         //sendbuffer[0]=0x33;
+         sendbuffer[0]= abschnittnummer;
+         sendbuffer[1]= abschnittnummer>>8;
          abschnittnummer++;
-         sendbuffer[3]= usbcount & 0xFF;
+         sendbuffer[2]= usbcount & 0xFF;
          
          
-         sendbuffer[4] = loopcount1&0xFF;
+         //sendbuffer[4] = loopcount1&0xFF;
          uint16_t adc0wert = adc_read(0);
          sendbuffer[5] = adc0wert & 0xFF;
          sendbuffer[6] = (adc0wert>>8) & 0xFF;
 
+         
+         
          
          // Messung anzeigen
          if (loopcount1%0xF == 0)
@@ -686,6 +697,14 @@ int main (void)
             errcount++;
          }
          
+         _delay_us(50);
+         
+         RAM_CS_LO;
+         for (uint8_t k=0;k<32;k++)
+         {
+            spiram_wrbyte(testaddress, testdata);
+         }
+         RAM_CS_HI;
          // Daten aendern
          if (outcounter%16 == 0)
          {
@@ -717,6 +736,7 @@ int main (void)
             eeprom_testaddress--;
            
             eepromstatus &= ~(1<<EE_WRITE);
+            
             lcd_gotoxy(19,1);
             lcd_putc((eeprom_testdata %10)+48);
             //lcd_putc(48);
@@ -784,14 +804,19 @@ int main (void)
             lcd_puthex(eeprom_indata);
             lcd_putc('*');
             
+            sendbuffer[3] = eeprom_testaddress;
+            sendbuffer[4] = eeprom_testdata;
+            //sendbuffer[12] = eeprom_testdata;
             
             // end Daten an EEPROM
          } // EE_WRITE
          
          
          sei();
+         //if (PINC & (1<<PC6))
+         {
          timer1_init(); // Kanaele starten
-         
+         }
         //PORTD &= ~(1<<PORTD5); //  LO
          
          

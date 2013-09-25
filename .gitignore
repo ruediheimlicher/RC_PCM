@@ -9,6 +9,7 @@ build/*
 *.xcodeproj
 *.hex
 *.o
+.dep
 usb_rawhid.lst
 usb_rawhid.o
 Makefile

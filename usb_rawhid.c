@@ -53,6 +53,7 @@
 #define RAWHID_RX_SIZE		32	// receive packet size
 #define RAWHID_RX_INTERVAL	8	// max # of ms between receive packets
 
+/*
 #define OSZIPORT           PORTD
 #define OSZIPORTDDR        DDRD
 #define OSZIPORTPIN        PIND
@@ -67,7 +68,7 @@
 #define OSZI_B_LO OSZIPORT &= ~(1<<OSZI_PULS_B)
 #define OSZI_B_HI OSZIPORT |= (1<<OSZI_PULS_B)
 #define OSZI_B_TOGG OSZIPORT ^= (1<<OSZI_PULS_B)
-
+*/
 
 /**************************************************************************
  *

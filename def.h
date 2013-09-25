@@ -47,16 +47,16 @@
 #define WDTBIT              7
 
 // CNC12
-#define CMD_PORT            PORTD   //    PORTB
-#define CMD_DDR             DDRD    //    DDRB
-#define CMD_PIN             PIND    //    PINB
+#define CMD_PORT            PORTD   
+#define CMD_DDR             DDRD    
+#define CMD_PIN             PIND
 
 
 #define KANAL_PORT            PORTB   //    PORTB
 #define KANAL_DDR             DDRB    //    DDRB
 
 
-#define KANAL_PIN          4
+#define KANAL_PIN          4                             // Ausgang fuer Summensignal
 #define KANAL_LO           KANAL_PORT &= ~(1<<KANAL_PIN)
 #define KANAL_HI           KANAL_PORT |= (1<<KANAL_PIN)
 
@@ -83,3 +83,10 @@
 #define EE_WREN   0
 #define EE_WRITE  1
 #define EE_READ   2
+
+#define MASTER_EN_PORT            PORTB   //    PORTB
+#define MASTER_EN_DDR             DDRB    //    DDRB
+
+#define MASTER_EN_PIN          6 // Mit PinChange-Interrupt beim Slave
+#define MASTER_EN_BIT          0 // Master erlaubt SPI
+
