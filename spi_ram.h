@@ -35,7 +35,7 @@
 //void spiram_init(uint8_t mode, uint8_t enhold);
 
 void spiram_init(void);
-                 
+uint8_t spiram_read_status(void);
                  
 
 //write a memory location

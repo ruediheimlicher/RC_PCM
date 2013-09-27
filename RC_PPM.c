@@ -104,7 +104,7 @@ void stopTimer2(void)
    TCCR2B = 0;
 }
 
-void slaveinit(void)
+void Master_Init(void)
 {
 	//OSZIPORTDDR |= (1<<PULS);	// Output
 	//OSZIPORT |= (1<<PULS);		// HI
@@ -183,7 +183,41 @@ void SPI_EE_init(void) // SS-Pin fuer EE aktivieren
    SPI_EE_PORT |= (1<<SPI_EE_CS_PIN);// HI
 }
 
+void SPI_start(void) // SPI-Pins aktivieren
+{
+   //http://www.atmel.com/dyn/resources/prod_documents/doc2467.pdf  page:165
+   //Master init
+   // Set MOSI and SCK output, all others input
+   SPI_DDR &= ~(1<<SPI_MISO_PIN);
+   SPI_PORT &= ~(1<<SPI_MISO_PIN); // LO
+   
+   SPI_DDR |= (1<<SPI_MOSI_PIN);
+   
+   SPI_DDR |= (1<<SPI_SCK_PIN);
+   SPI_PORT &= ~(1<<SPI_SCK_PIN); // LO
+   
+   SPI_DDR |= (1<<SPI_SS_PIN);
+   SPI_PORT |= (1<<SPI_SS_PIN); // HI
+   
+   // RAM-CS bereit
+   SPI_RAM_DDR |= (1<<SPI_RAM_CS_PIN); // RAM-CS-PIN Ausgang
+   SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN);// HI
 
+   // EE-CS bereit
+   SPI_EE_DDR |= (1<<SPI_EE_CS_PIN); // EE-CS-PIN Ausgang
+   SPI_EE_PORT |= (1<<SPI_EE_CS_PIN);// HI
+}
+
+void SPI_end(void) // SPI-Pins deaktivieren
+{
+   SPI_DDR &= ~(1<<SPI_MOSI_PIN); // MOSI off
+   SPI_DDR &= ~(1<<SPI_SCK_PIN); // SCK off
+   SPI_DDR &= ~(1<<SPI_SS_PIN); // SS off
+   
+   SPI_RAM_DDR &= ~(1<<SPI_RAM_CS_PIN); // RAM-CS-PIN off
+   SPI_EE_DDR &= ~(1<<SPI_EE_CS_PIN); // EE-CS-PIN off
+   
+}
 
 
 void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
@@ -207,7 +241,7 @@ void timer1_init(void)
 {
    
    MASTER_EN_PORT |= (1<<MASTER_EN_PIN); // Sub abstellen
-
+   OSZI_C_HI;
    // Quelle http://www.mikrocontroller.net/topic/103629
    
    OSZI_A_HI ; // Test: data fuer SR
@@ -218,8 +252,9 @@ void timer1_init(void)
    DDRD |= (1<<PORTD5); //  Ausgang
    PORTD |= (1<<PORTD5); //  Ausgang
 
-   TCCR1A = (1<<COM1A0) | (1<<COM1A1);// | (1<<WGM11);	// OC1B set on match, set on TOP
-   TCCR1B = (1<<WGM13) | (1<<WGM12) | (1<<CS11);		// TOP = ICR1, clk = sysclk/8 (->1us)
+   //TCCR1A = (1<<COM1A0) | (1<<COM1A1);// | (1<<WGM11);	// OC1B set on match, set on TOP
+   //TCCR1B = (1<<WGM13) | (1<<WGM12) ;		// TOP = ICR1, clk = sysclk/8 (->1us)
+   TCCR1B |= (1<<CS11);
    TCNT1  = 0;														// reset Timer
    
                               // Impulsdauer
@@ -247,7 +282,7 @@ void timer1_init(void)
 
 void timer1_stop(void)
 {
-   TCCR1A = 0;
+  // TCCR1A = 0;
    
 }
 
@@ -288,7 +323,7 @@ ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
       //OSZI_A_LO ;
       
       MASTER_EN_PORT &= ~(1<<MASTER_EN_PIN); // Master schickt Enable an Slave
-
+      OSZI_C_LO;
    }
    
    //OSZI_B_LO ;
@@ -424,7 +459,7 @@ int main (void)
 	sei();
 	
 	
-	slaveinit();
+	Master_Init();
 	
    
    SPI_PORT_Init(); //Pins fuer SPI aktivieren, incl. SS
@@ -699,12 +734,14 @@ int main (void)
          
          _delay_us(50);
          
+         /*
          RAM_CS_LO;
          for (uint8_t k=0;k<32;k++)
          {
             spiram_wrbyte(testaddress, testdata);
          }
          RAM_CS_HI;
+          */
          // Daten aendern
          if (outcounter%16 == 0)
          {

@@ -84,9 +84,9 @@
 #define EE_WRITE  1
 #define EE_READ   2
 
-#define MASTER_EN_PORT            PORTB   //    PORTB
-#define MASTER_EN_DDR             DDRB    //    DDRB
+#define MASTER_EN_PORT            PORTD   //    PORTB
+#define MASTER_EN_DDR             DDRD    //    DDRB
 
-#define MASTER_EN_PIN          6 // Mit PinChange-Interrupt beim Slave
+#define MASTER_EN_PIN          7 // Mit PinChange-Interrupt beim Slave
 #define MASTER_EN_BIT          0 // Master erlaubt SPI
 
