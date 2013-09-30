@@ -21,7 +21,7 @@ void spiadc_init()
    
 }
 
-void MCP3208_spi_Init(void)
+void MCP3208_init(void)
 {
    // Set MOSI, SCK and SS output, all other input
    SPI_DDR = (1<<SPI_MOSI_PIN)|(1<<SPI_SCK_PIN)|(1<<SPI_SS_PIN);  // set DD_SS to output
@@ -50,7 +50,7 @@ unsigned char MCP3208_spiWrite(char cData)
 unsigned int MCP3208_spiRead(unsigned char AD_type,unsigned char ADchanel)
 {
    unsigned char  tempHigh,tempLow,tempADtype,dummyData;
-   
+   //OSZI_D_LO ;
    SPI_PORT &= ~(1<<(SPI_SS_PIN));     //setbitLow CS  Pin
    MCP3208_spiDelay(delayCount );
    
@@ -65,7 +65,7 @@ unsigned int MCP3208_spiRead(unsigned char AD_type,unsigned char ADchanel)
    
    MCP3208_spiDelay(delayCount );
    SPI_PORT |= (1<<(SPI_SS_PIN));        //setbitHigh CS  Pin
-   
+   //OSZI_D_HI ;
    return (((gReciveHighByte & 0x0F)<<8)|gReciveLowByte);  // return 16bit variable (12bit A/D data)
 }
 

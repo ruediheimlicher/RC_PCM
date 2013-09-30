@@ -73,6 +73,11 @@
 #define ADC_START 0  // Start Messung Batteriespannung mit internem ADC
 
 #define POT_START 0  //    Start Messung Potentiometer
+
+#define SPI_START 2  //    Start SPI auf diesem device
+
+#define SPI_END   3  //    End SPI auf diesem device
+
 #define POT_MITTE 7  //    Mittelwerte der Potentiometer speichern
 
 #define ANZ_POT   6
@@ -88,5 +93,11 @@
 #define MASTER_EN_DDR             DDRD    //    DDRB
 
 #define MASTER_EN_PIN          7 // Mit PinChange-Interrupt beim Slave
+#define SUB_BUSY_PIN          6 // 
+
 #define MASTER_EN_BIT          0 // Master erlaubt SPI
+
+#define MEM_EN_PORT           PORTE // CS fuer Memory-Zugriffe des Masters
+#define MEM_EN_DDR           DDRE
+#define M>EM_>E>N_BIT   0
 

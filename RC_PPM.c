@@ -34,6 +34,9 @@
 
 #define LOOPDELAY 1
 
+#define SERVOMAX  4400
+#define SERVOMIN  1400
+
 volatile uint8_t do_output=0;
 static volatile uint8_t buffer[32]={};
 static volatile uint8_t sendbuffer[32]={};
@@ -82,6 +85,9 @@ volatile short int received=0;
 
 volatile uint16_t abschnittnummer=0;
 volatile uint16_t usbcount=0;
+
+volatile uint16_t minwert=0xFFFF;
+volatile uint16_t maxwert=0;
 
 
 
@@ -149,6 +155,12 @@ void Master_Init(void)
    MASTER_EN_PORT |= (1<<MASTER_EN_PIN); // HI
    
 
+   //DDRE |= (1<<PORTE0);
+   //PORTE |= (1<<PORTE0);
+
+   MEM_EN_DDR |= (1<<MEM_EN_BIT); 
+   MEM_EN_PORT |= (1<<MEM_EN_BIT);
+
   
 }
 
@@ -183,7 +195,7 @@ void SPI_EE_init(void) // SS-Pin fuer EE aktivieren
    SPI_EE_PORT |= (1<<SPI_EE_CS_PIN);// HI
 }
 
-void SPI_start(void) // SPI-Pins aktivieren
+void spi_start(void) // SPI-Pins aktivieren
 {
    //http://www.atmel.com/dyn/resources/prod_documents/doc2467.pdf  page:165
    //Master init
@@ -206,10 +218,18 @@ void SPI_start(void) // SPI-Pins aktivieren
    // EE-CS bereit
    SPI_EE_DDR |= (1<<SPI_EE_CS_PIN); // EE-CS-PIN Ausgang
    SPI_EE_PORT |= (1<<SPI_EE_CS_PIN);// HI
+   
+   //MCP3208_spi_Init();
+   //spiram_init();
+   //spieeprom_init();
+   //spiadc_init();
+   
 }
 
-void SPI_end(void) // SPI-Pins deaktivieren
+void spi_end(void) // SPI-Pins deaktivieren
 {
+   SPCR=0;
+   
    SPI_DDR &= ~(1<<SPI_MOSI_PIN); // MOSI off
    SPI_DDR &= ~(1<<SPI_SCK_PIN); // SCK off
    SPI_DDR &= ~(1<<SPI_SS_PIN); // SS off
@@ -240,8 +260,7 @@ void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
 void timer1_init(void)
 {
    
-   MASTER_EN_PORT |= (1<<MASTER_EN_PIN); // Sub abstellen
-   OSZI_C_HI;
+      OSZI_C_LO;
    // Quelle http://www.mikrocontroller.net/topic/103629
    
    OSZI_A_HI ; // Test: data fuer SR
@@ -258,7 +277,7 @@ void timer1_init(void)
    TCNT1  = 0;														// reset Timer
    
                               // Impulsdauer
-   OCR1B  = 0x1FF;				// Impulsdauer des Kanalimpulses
+   OCR1B  = 0xFF;				// Impulsdauer des Kanalimpulses
    
    TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt:
    TIMSK1 |= (1 << OCIE1B);  // enable timer compare interrupt:
@@ -273,6 +292,19 @@ void timer1_init(void)
    impulscounter = 0;
    //OCR1A  = POT_FAKTOR*POT_Array[1];
    //OCR1A  = POT_FAKTOR*POT_Array[impulscounter];
+   
+   /*
+   if (POT_Array[impulscounter] > SERVOMAX)
+   {
+     POT_Array[impulscounter] = SERVOMAX;
+   }
+   
+   if (POT_Array[impulscounter] < SERVOMIN)
+   {
+      POT_Array[impulscounter] = SERVOMIN;
+   }
+*/
+   
    OCR1A  = POT_Array[impulscounter]; // POT_Faktor schon nach ADC
       
    
@@ -307,6 +339,17 @@ ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
       //OCR1A  = POT_FAKTOR*POT_Array[1]; // 18 us
       //OCR1A  = POT_FAKTOR*POT_Array[impulscounter]; // 18 us
       
+      /*
+      if (POT_Array[impulscounter] > SERVOMAX)
+      {
+         POT_Array[impulscounter] = SERVOMAX;
+      }
+      
+      if (POT_Array[impulscounter]<  SERVOMIN)
+      {
+         POT_Array[impulscounter] = SERVOMIN;
+      }
+       */
       OCR1A  = POT_Array[impulscounter]; // 
    }
    else
@@ -314,16 +357,23 @@ ISR(TIMER1_COMPA_vect)	 //Ende der Pulslaenge fuer einen Kanal
       // Ende Impulspaket
       OCR1A  = 0x4FF;
       //OSZI_A_HI ;
-      _delay_us(200);
+     // _delay_us(200);
       KANAL_LO;
 
       // Alle Impulse gesendet, Timer1 stop. Timer1 wird bei Beginn des naechsten Paketes wieder gestartet
       timer1_stop();
+      
+      // SPI fuer device ausschalten
+      spi_end();
+      potstatus |= (1<<SPI_END); //       
       OSZI_B_HI ;
       //OSZI_A_LO ;
       
       MASTER_EN_PORT &= ~(1<<MASTER_EN_PIN); // Master schickt Enable an Slave
-      OSZI_C_LO;
+      _delay_us(2);
+      //PORTE |= (1<<PORTE0);
+      MEM_EN_PORT |= (1<<MEM_EN_BIT);
+      OSZI_C_HI;
    }
    
    //OSZI_B_LO ;
@@ -347,7 +397,7 @@ ISR(TIMER1_COMPB_vect)	 //Ende des Kanalimpuls. ca 0.3 ms
    {
       timer1_stop();
       OSZI_B_HI ;
-
+            
    }
 }
 
@@ -403,6 +453,8 @@ ISR (TIMER2_OVF_vect)
       
       potstatus |= (1<<POT_START); // Potentiometer messen
       
+      potstatus |= (1<<SPI_START); // Potentiometer messen
+      
       
       timer2BatterieCounter++; // Intervall fuer Messung der Batteriespannung
       if (timer2BatterieCounter >= 0xF)
@@ -454,7 +506,7 @@ int main (void)
     
 	// Wait an extra second for the PC's operating system to load drivers
 	// and do whatever it does to actually be ready for input
-	_delay_ms(1000);
+	_delay_ms(100);
 
 	sei();
 	
@@ -462,37 +514,38 @@ int main (void)
 	Master_Init();
 	
    
-   SPI_PORT_Init(); //Pins fuer SPI aktivieren, incl. SS
+   //SPI_PORT_Init(); //Pins fuer SPI aktivieren, incl. SS
    
-   SPI_RAM_init(); // SS-Pin fuer RAM aktivieren
+   //SPI_RAM_init(); // SS-Pin fuer RAM aktivieren
    
-   SPI_EE_init();
+   //SPI_EE_init();
    
+      
    volatile    uint8_t outcounter=0;
-   volatile   uint8_t testdata =0x00;
-   volatile   uint8_t testaddress =0x00;
-   volatile   uint8_t errcount =0x00;
-   volatile uint8_t ram_indata=0;
+   volatile    uint8_t testdata =0x00;
+   volatile    uint8_t testaddress =0x00;
+   volatile    uint8_t errcount =0x00;
+   volatile    uint8_t ram_indata=0;
 
-   volatile uint8_t eeprom_indata=0;
-   volatile   uint8_t eeprom_testdata =0x00;
-   volatile   uint8_t eeprom_testaddress =0x00;
+   volatile    uint8_t eeprom_indata=0;
+   volatile    uint8_t eeprom_testdata =0x00;
+   volatile    uint8_t eeprom_testaddress =0x00;
 
    
-   MCP3208_spi_Init();
+   //MCP3208_spi_Init();
    
-   SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN);
-   _delay_us(10);
+  // SPI_RAM_PORT &= ~(1<<SPI_RAM_CS_PIN);
+  // _delay_us(10);
    
-   spiram_init();
+  // spiram_init();
    
-   SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN);
-   _delay_us(10);
+  // SPI_RAM_PORT |= (1<<SPI_RAM_CS_PIN);
+  // _delay_us(10);
 	/* initialize the LCD */
 	lcd_initialize(LCD_FUNCTION_8x2, LCD_CMD_ENTRY_INC, LCD_CMD_ON);
 
 	lcd_puts("Guten Tag\0");
-	delay_ms(1000);
+	delay_ms(100);
 	lcd_cls();
 	//lcd_puts("READY\0");
 	lcd_puts("V: \0");
@@ -599,6 +652,13 @@ int main (void)
             lcd_putint12Bit(POT_Array[1]);
             lcd_putc('*');
              */
+            /*
+            lcd_gotoxy(0,1);
+            lcd_putint12Bit(maxwert);
+            lcd_putc('*');
+            lcd_putint12Bit(minwert);
+            lcd_putc('*');
+             */
          }
          
          // neue Daten in sendbuffer
@@ -617,8 +677,9 @@ int main (void)
       
       /**	ADC	***********************/
 
-      if (adcstatus & (1<< ADC_START)) // ADC starten
+     if (adcstatus & (1<< ADC_START)) // ADC starten
       {
+         
          Batteriespannung = adc_read(0);
          
          adcstatus &=  ~(1<< ADC_START);
@@ -640,17 +701,54 @@ int main (void)
 
       }
       
-      if (potstatus & (1<< POT_START)) // POT starten
+//      if (potstatus & (1<< POT_START)) // POT starten, in TIMER2_OVF_vect gesetzt
+      if (potstatus & (1<< SPI_START)) // POT starten, in TIMER2_OVF_vect gesetzt
       {
-         //OSZI_A_LO ;
+         MASTER_EN_PORT |= (1<<MASTER_EN_PIN); // Sub abstellen
+         _delay_us(2);
+         
+         
+         
+         potstatus &= ~(1<< POT_START); // Bit zuruecksetzen
+         
+         potstatus &= ~(1<< SPI_START);   // Bit zuruecksetzen
+         
+         OSZI_D_LO ;
          uint8_t i=0;
          
-         spiadc_init();
+         // SPI fuer device einschschalten
+         spi_start();
+         
+         //spiadc_init();
+         
+         
          for(i=0;i< ANZ_POT;i++)
          {
+            //PORTE &= ~(1<<PORTE0);
+            MEM_EN_PORT &= ~(1<<MEM_EN_BIT);
+            
+            spiram_init();
+            // RAM lesen als Test fuer Zeitverbrauch
+            _delay_us(1);
+            RAM_CS_LO;
+            _delay_us(LOOPDELAY);
+            //     OSZI_B_LO;
+            _delay_us(LOOPDELAY);
+            ram_indata = spiram_rdbyte(testaddress);
+            _delay_us(LOOPDELAY);
+            //     OSZI_B_HI;
+            RAM_CS_HI;
+            //PORTE |= (1<<PORTE0);
+            MEM_EN_PORT |= (1<<MEM_EN_BIT);
+            
+            spiadc_init();
+            
+            POT_Array[i] = 0x800;
             //lcd_putint(i);
             if (i<2)
             {
+               
+
                POT_Array[i] = POT_FAKTOR*MCP3208_spiRead(SingleEnd,i);
                // Filter
                //POT_Array[i] = 3*POT_Array[i]/4 + (MCP3208_spiRead(SingleEnd,i)/4);
@@ -662,6 +760,7 @@ int main (void)
                POT_Array[i] = 0x800;
             }
          }
+         OSZI_D_HI ;
          anzeigecounter++;
          
          // Mittelwert speichern
@@ -674,28 +773,63 @@ int main (void)
          if (anzeigecounter %0xF ==0)
          {
             //lcd_gotoxy(0,1);
-             if (usbstatus & (1<<USB_RECV))
-             {
-                //lcd_putc('+');
-                usbstatus &= ~(1<<USB_RECV);
-             }
+            if (usbstatus & (1<<USB_RECV))
+            {
+               //lcd_putc('+');
+               usbstatus &= ~(1<<USB_RECV);
+            }
             
             //lcd_putint12Bit(POT_Array[0]);
             //lcd_putc(' ');
             //lcd_putint12Bit(POT_Array[1]);
-             
+            
          }
          
          
          
          
          ///usb_rawhid_send((void*)sendbuffer, 50); // in loopcount0
-         potstatus &= ~(1<< POT_START);
          
          // Daten an RAM
          //cli();
+         //PORTE &= ~(1<<PORTE0);
+         MEM_EN_PORT &= ~(1<<MEM_EN_BIT);
          
-        spiram_init();
+         spiram_init();
+          
+         // statusregister schreiben
+         RAM_CS_LO;
+         _delay_us(LOOPDELAY);
+         spiram_write_status(0x00);
+         _delay_us(LOOPDELAY);
+         RAM_CS_HI; // SS HI End
+         _delay_us(2);
+     
+         // testdata in-out
+         RAM_CS_LO;
+         
+         _delay_us(LOOPDELAY);
+         //      OSZI_A_LO;
+         spiram_wrbyte(testaddress, testdata);
+         //     OSZI_A_HI;
+         RAM_CS_HI;
+         
+         // Kontrolle
+         _delay_us(2);
+         RAM_CS_LO;
+         _delay_us(LOOPDELAY);
+         //     OSZI_B_LO;
+         _delay_us(LOOPDELAY);
+         ram_indata = spiram_rdbyte(testaddress);
+         _delay_us(LOOPDELAY);
+         //     OSZI_B_HI;
+         RAM_CS_HI;
+         
+         // Fehler zaehlen
+         if (!(testdata == ram_indata))
+         {
+            errcount++;
+         }
          
          // statusregister schreiben
          RAM_CS_LO;
@@ -703,65 +837,59 @@ int main (void)
          spiram_write_status(0x00);
          _delay_us(LOOPDELAY);
          RAM_CS_HI; // SS HI End
-         _delay_us(50);
-      
-         
-         // testdata in-out
-         RAM_CS_LO;
-         
-         _delay_us(LOOPDELAY);
-   //      OSZI_A_LO;
-         spiram_wrbyte(testaddress, testdata);
-    //     OSZI_A_HI;
-         RAM_CS_HI;
-         
-         // Kontrolle
-         _delay_us(50);
-         RAM_CS_LO;
-         _delay_us(LOOPDELAY);
-    //     OSZI_B_LO;
-         _delay_us(LOOPDELAY);
-         ram_indata = spiram_rdbyte(testaddress);
-         _delay_us(LOOPDELAY);
-    //     OSZI_B_HI;
-         RAM_CS_HI;
+         _delay_us(2);
 
-         // Fehler zaehlen
-         if (!(testdata == ram_indata))
-         {
-            errcount++;
-         }
+         // err
+         RAM_CS_LO;
          
-         _delay_us(50);
+         _delay_us(LOOPDELAY);
+         //      OSZI_A_LO;
+         spiram_wrbyte(0, errcount);
+         //     OSZI_A_HI;
+         RAM_CS_HI;
+         
+
+         
+         
+         _delay_us(2);
          
          /*
-         RAM_CS_LO;
-         for (uint8_t k=0;k<32;k++)
-         {
-            spiram_wrbyte(testaddress, testdata);
-         }
-         RAM_CS_HI;
+          RAM_CS_LO;
+          for (uint8_t k=0;k<32;k++)
+          {
+          spiram_wrbyte(testaddress, testdata);
+          }
+          RAM_CS_HI;
           */
          // Daten aendern
-         if (outcounter%16 == 0)
+         if (outcounter%0x40 == 0)
          {
+           
+           // timer2Counter=0;
+            //lcd_gotoxy(0,0);
+            /*
+            lcd_putint12(timer2Counter);
+            
+            lcd_putc('*');
+            
+            lcd_putint(testdata);
+            lcd_putc('*');
+            lcd_putint(ram_indata);
+            lcd_putc('+');
+             */
+            //lcd_putint(errcount);
+            //lcd_putc('+');
+            
+            
             testdata++;
             testaddress--;
             
-           
-            lcd_gotoxy(0,0);
-            //lcd_putint(testdata);
-            //lcd_putc('*');
-            //lcd_putint(ram_indata);
-            //lcd_putc('+');
-            lcd_putint(errcount);
-            //lcd_putc('+');
             
          }
-          outcounter++;
+         outcounter++;
          
          _delay_us(LOOPDELAY);
-
+         
          // end Daten an RAM
          
          
@@ -771,7 +899,7 @@ int main (void)
          {
             eeprom_testdata++;
             eeprom_testaddress--;
-           
+            
             eepromstatus &= ~(1<<EE_WRITE);
             
             lcd_gotoxy(19,1);
@@ -779,7 +907,7 @@ int main (void)
             //lcd_putc(48);
             spieeprom_init();
             
-            OSZI_C_LO;
+            //OSZI_C_LO;
             // statusregister schreiben
             
             // WREN
@@ -800,7 +928,7 @@ int main (void)
             
             _delay_us(10);
             
-            // Byte  write 
+            // Byte  write
             
             // WREN schicken 220 us
             EE_CS_LO;
@@ -830,16 +958,19 @@ int main (void)
             _delay_us(LOOPDELAY);
             //     OSZI_B_HI;
             EE_CS_HI;
-            OSZI_C_HI;
+            //OSZI_C_HI;
             
             
             lcd_gotoxy(0,1);
             lcd_putc('*');
             lcd_puthex(eeprom_testdata);
-
+            
             lcd_putc('*');
             lcd_puthex(eeprom_indata);
             lcd_putc('*');
+            
+            lcd_putc('*');
+            lcd_puthex(errcount);
             
             sendbuffer[3] = eeprom_testaddress;
             sendbuffer[4] = eeprom_testdata;
@@ -848,13 +979,15 @@ int main (void)
             // end Daten an EEPROM
          } // EE_WRITE
          
-         
+         //spi_end();
          sei();
          //if (PINC & (1<<PC6))
          {
-         timer1_init(); // Kanaele starten
+            
+            timer1_init(); // Kanaele starten
+            
          }
-        //PORTD &= ~(1<<PORTD5); //  LO
+         //PORTD &= ~(1<<PORTD5); //  LO
          
          
          //timer1_stop();
@@ -862,6 +995,17 @@ int main (void)
          
          //OSZI_A_HI ;
       } // end Pot messen
+      
+      
+      if (potstatus & (1<< SPI_END)) // SPI auf diesem device beenden
+      {
+         OSZI_D_LO ;
+         potstatus &= ~(1<< SPI_END);
+         //spi_end();
+         _delay_us(20);
+         OSZI_D_HI ;
+      }
+
       
       /**	END ADC	***********************/
       
