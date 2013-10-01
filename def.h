@@ -98,6 +98,6 @@
 #define MASTER_EN_BIT          0 // Master erlaubt SPI
 
 #define MEM_EN_PORT           PORTE // CS fuer Memory-Zugriffe des Masters
-#define MEM_EN_DDR           DDRE
-#define M>EM_>E>N_BIT   0
+#define MEM_EN_DDR            DDRE
+#define MEM_EN_PIN            0
 
