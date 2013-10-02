@@ -70,7 +70,7 @@
 
 // Bit
 
-#define ADC_START 0  // Start Messung Batteriespannung mit internem ADC
+#define ADC_START 0  //    Start Messung Batteriespannung mit internem ADC
 
 #define POT_START 0  //    Start Messung Potentiometer
 
@@ -92,12 +92,12 @@
 #define MASTER_EN_PORT            PORTD   //    PORTB
 #define MASTER_EN_DDR             DDRD    //    DDRB
 
-#define MASTER_EN_PIN          7 // Mit PinChange-Interrupt beim Slave
-#define SUB_BUSY_PIN          6 // 
+#define MASTER_EN_PIN            7 // Mit PinChange-Interrupt beim Sub
+#define SUB_BUSY_PIN             6 // Eingang fuer busy-Meldung des Sub
 
-#define MASTER_EN_BIT          0 // Master erlaubt SPI
+#define MASTER_EN_BIT            0 // Master erlaubt SPI
 
-#define MEM_EN_PORT           PORTE // CS fuer Memory-Zugriffe des Masters
-#define MEM_EN_DDR            DDRE
-#define MEM_EN_PIN            0
+#define MEM_EN_PORT              PORTE // CS fuer Memory-Zugriffe des Masters
+#define MEM_EN_DDR               DDRE
+#define MEM_EN_PIN               0
 

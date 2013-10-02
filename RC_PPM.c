@@ -55,14 +55,14 @@ volatile uint8_t timer0startwert=TIMER0_STARTWERT;
 
 void delay_ms(unsigned int ms);
 
-volatile uint8_t           adcstatus=0x00;
+static volatile uint8_t           adcstatus=0x00;
 static volatile uint8_t    usbstatus=0x00;
 
 static volatile uint8_t      eepromstatus=0x00;
 static volatile uint8_t    potstatus=0x80; // Bit 7 gesetzt, Mittelwerte setzen
 static volatile uint8_t    impulscounter=0x00;
 
-volatile uint8_t masterstatus = 0;
+static volatile uint8_t masterstatus = 0;
 
 #define USB_RECV  0 
 
@@ -720,12 +720,7 @@ int main (void)
       {
          MASTER_EN_PORT |= (1<<MASTER_EN_PIN); // Sub abstellen
          _delay_us(2);
-         
-         
-         
-         
-         
-         
+          
          //potstatus &= ~(1<< POT_START); // Bit zuruecksetzen
          
          potstatus &= ~(1<< SPI_START);   // Bit zuruecksetzen
