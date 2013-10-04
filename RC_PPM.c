@@ -290,7 +290,7 @@ void timer1_init(void)
    TCNT1  = 0;														// reset Timer
    
                               // Impulsdauer
-   OCR1B  = 0xFF;				// Impulsdauer des Kanalimpulses
+   OCR1B  = 0x80;				// Impulsdauer des Kanalimpulses
    
    TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt:
    TIMSK1 |= (1 << OCIE1B);  // enable timer compare interrupt:
@@ -461,8 +461,9 @@ ISR (TIMER2_OVF_vect)
 { 
 	timer2Counter ++;
    
-	if (timer2Counter >= 0x474) // Laenge des Impulspakets 20ms
-//	if (timer2Counter >= 0x8E8) // Laenge des Impulspakets 20ms
+	if (timer2Counter >= 0x474) // Laenge des Impulspakets 20ms teensy
+            
+      //	if (timer2Counter >= 0x8E8) // Laenge des Impulspakets 20ms
 	{
       
       //potstatus |= (1<<POT_START); // Potentiometer messen
@@ -801,7 +802,7 @@ int main (void)
                usbstatus &= ~(1<<USB_RECV);
             }
             
-            //lcd_putint12Bit(POT_Array[0]);
+            lcd_putint12Bit(POT_Array[0]);
             //lcd_putc(' ');
             //lcd_putint12Bit(POT_Array[1]);
             

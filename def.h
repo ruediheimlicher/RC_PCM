@@ -67,23 +67,22 @@
 #define ADC_DDR             DDRF    //    DDRF
 #define ADC_PIN             PINF    //    PINF
 
+#define SUB_BUSY_PIN          6 // Sub ist busy
+
+#define SUB_EN_PIN          7 // Sub ist enabled
 
 // Bit
 
+#define SUB_TASK_BIT         3 // Slave hat Aufgaben
+
+#define SUB_LCD_BIT         4 // Slave soll auf LCD schreiben
 #define ADC_START 0  //    Start Messung Batteriespannung mit internem ADC
-
 #define POT_START 0  //    Start Messung Potentiometer
-
 #define SPI_START 2  //    Start SPI auf diesem device
-
 #define SPI_END   3  //    End SPI auf diesem device
-
 #define POT_MITTE 7  //    Mittelwerte der Potentiometer speichern
-
 #define ANZ_POT   6
-
 #define POT_FAKTOR 1.20
-
 
 #define EE_WREN   0
 #define EE_WRITE  1
